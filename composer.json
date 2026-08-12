@@ -1,0 +1,31 @@
+{
+    "name": "aichatpanel/aichatpanel",
+    "description": "Interactive AI chat panel for FreeScout, backed by any OpenAI-compatible LLM endpoint.",
+    "license": "AGPL-3.0-or-later",
+    "authors": [
+        {
+            "name": "Yannik Lieblinger"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Modules\\AiChatPanel\\Providers\\AiChatPanelServiceProvider"
+            ],
+            "aliases": {}
+        }
+    },
+    "require": {
+        "php": ">=7.1.0",
+        "ext-curl": "*",
+        "ext-json": "*"
+    },
+    "replace": {
+        "laravel/framework": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\AiChatPanel\\": ""
+        }
+    }
+}
