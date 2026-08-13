@@ -401,11 +401,40 @@ class DraftEditingTest extends AiChatPanelTestCase
         $this->assertStringNotContainsString('An unsent draft reply.', $content);
     }
 
-    public function testThePromptSaysNothingAboutDraftsWhenThereAreNone()
+    public function testThePromptSaysOutLoudWhenThereIsNoDraft()
     {
         $content = (new ContextBuilder($this->context()))->build()['content'];
 
-        $this->assertStringNotContainsString('Unsent drafts', $content);
-        $this->assertStringNotContainsString('conversation.get_drafts', $content);
+        $this->assertStringContainsString('Unsent drafts: none.', $content);
+        $this->assertStringContainsString('conversation.create_draft_reply', $content);
+    }
+
+    /**
+     * The bug this file's last section is named after, one step further on.
+     *
+     * The model writes a draft, the agent discards it, and the agent asks for
+     * another in the same chat. The successful create_draft_reply result is
+     * still sitting in the history, so the prompt has to contradict it: a
+     * missing "Unsent drafts" line is not a denial, and the model read it as
+     * confirmation that its draft was still there and refused to write a new
+     * one without calling a single tool.
+     */
+    public function testThePromptContradictsADraftThatHasSinceBeenDeleted()
+    {
+        $draft = $this->addDraft('The draft that was there a moment ago.');
+
+        $this->assertStringContainsString(
+            'thread '.$draft->id,
+            (new ContextBuilder($this->context()))->build()['content']
+        );
+
+        $draft->delete();
+        $this->conversation->refresh();
+
+        $content = (new ContextBuilder($this->context()))->build()['content'];
+
+        $this->assertStringContainsString('Unsent drafts: none.', $content);
+        $this->assertStringNotContainsString('thread '.$draft->id, $content);
+        $this->assertStringContainsString('no draft right now', $content);
     }
 }

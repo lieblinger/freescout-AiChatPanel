@@ -164,6 +164,12 @@ that already exists rather than adding to it.
 21. With a draft present, ask for a *new* draft. `create_draft_reply` refuses and
     names the existing thread; the model should switch to `update_draft` by
     itself.
+22. Now **discard** that draft in the conversation, and without reloading the
+    panel ask for a new draft in the same chat. It must call
+    `create_draft_reply` and write one. If it answers from the chat history
+    instead — "there is already a draft", "only one draft per conversation" —
+    without calling a tool, the prompt is no longer contradicting the stale
+    tool result.
 
 ### Audit log
 

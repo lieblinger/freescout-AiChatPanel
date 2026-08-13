@@ -22,9 +22,11 @@ use Modules\AiChatPanel\Services\Tools\ToolResult;
  *   - it can never be added to the admin's auto-run allowlist. ToolRegistry
  *     hard-codes it in neverAutoRun(), because a customer-facing message is the
  *     one place where an unattended mistake reaches a customer.
- *   - it refuses to create a second draft, so a model in a loop cannot bury the
- *     agent's own work under a pile of drafts. Changing a draft that already
- *     exists is conversation.update_draft's job, not a second create.
+ *   - while a draft exists it refuses to create another, so a model in a loop
+ *     cannot bury the agent's own work under a pile of drafts. Changing a draft
+ *     that already exists is conversation.update_draft's job, not a second
+ *     create. Once that draft is sent or discarded this tool works again: the
+ *     check is on the conversation as it is now, not a slot spent for good.
  */
 class CreateDraftReplyTool extends AbstractTool
 {
@@ -44,8 +46,10 @@ class CreateDraftReplyTool extends AbstractTool
         return 'Save a NEW draft reply to the customer on the current conversation. The draft is '
             .'NOT sent: a human reviews it and sends it themselves. Use this only when the agent '
             .'explicitly asks you to prepare a reply in the conversation. If they just want to '
-            .'see suggested wording, write it in the chat instead. If the conversation already '
-            .'has a draft, do not call this — change that one with conversation.update_draft.';
+            .'see suggested wording, write it in the chat instead. If a draft already exists this '
+            .'call is refused and names the thread to update instead, so check the conversation '
+            .'metadata rather than assuming: a draft written earlier in this chat may since have '
+            .'been sent or discarded.';
     }
 
     /**

@@ -66,6 +66,14 @@ in the system message that would be stale the moment it edited anything.
 assistant or a human wrote it. Only drafts: a reply that has been sent, or a note
 colleagues have already read, can never be changed through this module.
 
+One draft **at a time**: while a conversation has an unsent draft,
+`conversation.create_draft_reply` refuses and names the thread to update instead,
+so a model in a loop cannot bury the agent's own work. Once that draft is sent or
+discarded the tool works again — nothing is spent for good. The prompt states the
+draft situation either way, including "Unsent drafts: none", because a draft the
+model wrote earlier is still in the chat history as a successful tool call and
+silence would read as agreement that it is still there.
+
 ---
 
 ## Requirements
