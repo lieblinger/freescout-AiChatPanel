@@ -48,7 +48,6 @@ if (typeof(LangMessages) == "undefined") {
 		"running_tool": "{{ __j('Running :tool…') }}",
 		"tools_unsupported": "{{ __j('The selected model cannot use tools, so they are disabled.') }}",
 		"show_reasoning": "{{ __j('Show reasoning') }}",
-		"tokens": "{{ __j(':count tokens') }}",
 		"tool_ran": "{{ __j('Ran :tool') }}",
 		"tool_failed": "{{ __j(':tool failed') }}",
 

@@ -170,7 +170,6 @@
     "Running :tool…": "Führt :tool aus …",
     "The selected model cannot use tools, so they are disabled.": "Das gewählte Modell kann keine Tools nutzen, daher sind sie deaktiviert.",
     "Show reasoning": "Gedankengang anzeigen",
-    ":count tokens": ":count Tokens",
     "Ran :tool": ":tool ausgeführt",
     ":tool failed": ":tool fehlgeschlagen",
     "Insert into reply": "In Antwort einfügen",

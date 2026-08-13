@@ -275,6 +275,7 @@
         };
 
         setWidth(parseInt($el.attr('data-width'), 10) || 380, false);
+        updatePanelBounds();
 
         bindPanel();
 
@@ -290,6 +291,8 @@
             e.preventDefault();
             togglePanel();
         });
+
+        $(window).on('scroll resize', scheduleBoundsUpdate);
 
         panel.$el.find('.aicp-close').on('click', function (e) {
             e.preventDefault();
@@ -404,6 +407,58 @@
 
     function isNarrow() {
         return $(window).width() < 768;
+    }
+
+    var bounds_frame = null;
+
+    /**
+     * Keep the panel between the navbar and the footer.
+     *
+     * Both of them scroll with the page: the navbar is navbar-static-top and
+     * leaves the viewport at the top, the footer enters it at the bottom. Fixed
+     * offsets would leave an empty strip above the panel as soon as the thread
+     * is scrolled, and would cover the footer at the end of it.
+     */
+    function updatePanelBounds() {
+        var $navbar = $('.navbar-static-top').first();
+        var navbar_height = $navbar.length ? $navbar.outerHeight() : 50;
+        var scrolled = window.pageYOffset || document.documentElement.scrollTop || 0;
+
+        var viewport = window.innerHeight || document.documentElement.clientHeight;
+        var $footer = $('.footer').first();
+        var bottom = 0;
+
+        if ($footer.length && $footer.is(':visible')) {
+            // Stop at the footer's margin box, not its border box: that is where
+            // #conv-layout-customer ends too, so the two columns end level.
+            var margin = parseFloat($footer.css('margin-top')) || 0;
+
+            bottom = Math.max(0, viewport - ($footer[0].getBoundingClientRect().top - margin));
+        }
+
+        var style = document.documentElement.style;
+
+        style.setProperty('--aicp-top', Math.max(0, navbar_height - scrolled) + 'px');
+        style.setProperty('--aicp-bottom', bottom + 'px');
+    }
+
+    /**
+     * updatePanelBounds() on a scroll listener, at most once per frame.
+     */
+    function scheduleBoundsUpdate() {
+        if (!window.requestAnimationFrame) {
+            updatePanelBounds();
+            return;
+        }
+
+        if (bounds_frame) {
+            return;
+        }
+
+        bounds_frame = window.requestAnimationFrame(function () {
+            bounds_frame = null;
+            updatePanelBounds();
+        });
     }
 
     function setWidth(width, persist) {
@@ -894,6 +949,11 @@
 
         html += '<div class="aicp-bubble aicp-markdown">' + body + '</div>';
 
+        // Before the actions, not after them: the action row keeps its height
+        // while it is invisible, which would push the meta line away from the
+        // answer it belongs to.
+        html += renderMeta(message.meta);
+
         if ($.trim(message.body || '')) {
             html += '<div class="aicp-message-actions">'
                 + '<button type="button" class="btn btn-link btn-xs aicp-action-reply" title="' + escapeHtml(t('insert_reply', 'Insert into reply')) + '">'
@@ -905,8 +965,6 @@
                 + '</div>';
         }
 
-        html += renderMeta(message.meta);
-
         return html + '</div>';
     }
 
@@ -917,10 +975,8 @@
 
         var parts = [];
 
-        if (meta.usage && meta.usage.total_tokens) {
-            parts.push(t('tokens', ':count tokens', {count: meta.usage.total_tokens}));
-        }
-
+        // Token counts stay in the stored meta for support and debugging, but
+        // they are not something the agent needs while working.
         if (meta.duration) {
             parts.push(meta.duration + ' s');
         }
@@ -977,6 +1033,13 @@
         }
     }
 
+    /**
+     * Fill the model picker, and hide it when there is nothing to pick.
+     *
+     * With a single allowed model the select is still populated — sendMessage()
+     * reads its value — but showing a one-entry dropdown only asks the agent to
+     * make a choice that does not exist.
+     */
     function fillModels(models, current) {
         var $select = panel.$el.find('.aicp-model');
 
@@ -987,7 +1050,7 @@
                 $select.append($('<option>').val(current).text(current));
             }
 
-            $select.toggleClass('hidden', !current);
+            $select.addClass('hidden');
             return;
         }
 
@@ -999,7 +1062,7 @@
             $select.val(current);
         }
 
-        $select.removeClass('hidden');
+        $select.toggleClass('hidden', models.length < 2);
     }
 
     function showNotices(notices) {

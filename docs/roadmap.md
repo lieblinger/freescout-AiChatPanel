@@ -144,3 +144,4 @@ Honest list of things that work but could be better.
   asking the model to try again.
 - **The model picker lists what the endpoint reports**, cached for five minutes.
   A model added to the endpoint mid-session takes up to five minutes to appear.
+  It is hidden entirely when there is only one model to choose from.

@@ -11,6 +11,12 @@
 
 :root {
     --aicp-width: 380px;
+
+    /* Distance from the top and the bottom of the viewport to the panel. The
+       navbar scrolls away with the page and the footer scrolls in from below,
+       so module.js keeps both in step with them — see updatePanelBounds(). */
+    --aicp-top: 50px;
+    --aicp-bottom: 0px;
 }
 
 /* ===================================================================
@@ -54,16 +60,20 @@
 
 .aicp-panel {
     position: fixed;
-    top: 50px;                 /* below FreeScout's fixed navbar */
+    top: var(--aicp-top);      /* below the navbar while it is on screen */
     right: 0;
-    bottom: 0;
+    bottom: var(--aicp-bottom); /* above the footer once it scrolls in */
     width: var(--aicp-width);
-    z-index: 1035;             /* above the conversation, below modals (1040) */
+    /* Above the conversation, below the navbar (1000) so its dropdowns — the
+       user menu, the search — still open over the panel, and below modals. */
+    z-index: 999;
     display: none;
     flex-direction: column;
     background: #fff;
-    border-left: 1px solid #d8dfe3;
-    box-shadow: -2px 0 8px rgba(0, 0, 0, .06);
+    /* The same hairlines the customer sidebar draws (#conv-layout-customer), so
+       the panel reads as another FreeScout column, not a floating overlay. */
+    border-left: 1px solid #d6dde3;
+    border-bottom: 1px solid #d6dde3;
 }
 
 body.aicp-open .aicp-panel {
@@ -106,25 +116,27 @@ body.aicp-resizing {
    Header
    =================================================================== */
 
+/* Height, background and borderless bottom edge are #conv-toolbar's, so the
+   header reads as the same bar as the conversation toolbar beside it. */
 .aicp-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 10px;
-    border-bottom: 1px solid #e6ebee;
-    background: #f7f9fa;
+    height: 53px;
+    padding: 0 10px;
+    background: #deecf9;
     flex: 0 0 auto;
 }
 
 .aicp-header-title {
     font-weight: 600;
-    color: #3e4b53;
+    color: #005a9e;
     white-space: nowrap;
 }
 
 .aicp-header-title .glyphicon {
     margin-right: 5px;
-    color: #0095da;
+    color: #005a9e;
 }
 
 .aicp-header-actions {
@@ -143,11 +155,11 @@ body.aicp-resizing {
 
 .aicp-header-actions .btn-link {
     padding: 2px 5px;
-    color: #7f8c96;
+    color: #005a9e;
 }
 
 .aicp-header-actions .btn-link:hover {
-    color: #3e4b53;
+    color: #0078d7;
 }
 
 /* ===================================================================
@@ -518,6 +530,7 @@ body.aicp-resizing {
     .aicp-panel {
         width: 100%;
         top: 0;
+        bottom: 0;
         z-index: 1045;
     }
 

@@ -104,7 +104,10 @@ an empty list.
 2. Click the **speech-bubble icon** in the toolbar. The panel opens on the right
    and the conversation layout shifts left to make room.
 3. Type `Summarise this conversation in two sentences.` and press **Ctrl+Enter**.
-4. The answer streams in. Underneath it: token count, duration and tok/s.
+4. The answer streams in. Underneath it: duration and tok/s — no token count,
+   that stays in the stored meta.
+   The model picker in the header is only shown when the allowlist holds two or
+   more models; with a single one there is nothing to pick.
    With a reasoning model there is a **Show reasoning** link — the chain of
    thought, collapsed, and never sent back to the model.
 
