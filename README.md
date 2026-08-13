@@ -18,7 +18,9 @@ Licence: **AGPL-3.0-or-later**.
 ## What it does
 
 - A resizable chat panel on the right of the conversation, opened from a toolbar
-  button. Open/closed state and width persist per user.
+  button. Open/closed state and width persist per user, and the panel gets out
+  of the way rather than let the conversation become unreadable — see
+  [Responsive behaviour](#responsive-behaviour).
 - Multi-turn chat about the open conversation, with the full thread history,
   conversation metadata, customer details and attachment filenames as context.
 - Streaming responses, rendered as Markdown and sanitised.
@@ -40,6 +42,34 @@ Licence: **AGPL-3.0-or-later**.
 - Chats are stored per conversation and per user, so reopening a conversation
   restores the whole exchange including tool calls.
 - English and German UI.
+
+### Responsive behaviour
+
+**The message thread always wins.** The panel takes a column of its own only
+while the thread would keep at least **450px** after everything else has been
+paid for; otherwise it becomes a drawer over the conversation and starts
+closed. What "everything else" costs is measured, not assumed — core's left nav
+(260px until 991px) and the customer rail (280px until 1100px) both come off
+the window before the panel gets to ask for anything.
+
+| Panel | Conversation layout | Opens itself from the saved preference |
+|---|---|---|
+| column on the right, drag to resize (300–900px) | shifted left by the panel width | yes |
+| drawer over the thread, dismissed by tapping the dimmer | untouched | no — starts closed |
+| drawer, full width (≤ 767px) | untouched | no — starts closed |
+
+With core's default sidebars that puts the switch at roughly **1290px**: below
+it even a 300px panel would leave the thread under 450px, so there is no column
+to be had and the panel steps aside instead of squeezing the conversation into
+a strip. Between there and about 1370px the panel is a column but a narrower
+one than the stored width — capped for display only, so widening the window
+gives the stored width straight back.
+
+As a drawer a backdrop dims the thread and dismisses it on tap, and
+opening or closing it does **not** write the stored preference: reading a ticket
+on a phone never changes what the desktop comes back to. Resizing the window
+past the switch closes the panel on the way down and restores it on the way
+back up, again without touching the preference.
 
 ### Built-in tools
 

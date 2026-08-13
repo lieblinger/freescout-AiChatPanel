@@ -187,15 +187,48 @@ were blocked (`status = 5`).
     including the tool activity rows.
 23. Press the **refresh icon** in the panel header for a new chat.
 
+### Responsive behaviour
+
+The panel gives up its column as soon as the message thread would drop below
+450px, which with core's default sidebars lands around 1290px. Do this in a
+normal browser window you can resize — a device emulator that does not re-run
+the measurement on rotate will not show step 27. The number to watch is the
+thread, not the window:
+
+```js
+// paste in the console; the panel must never push this below 450
+(m => Math.round(m.getBoundingClientRect().width - parseFloat(getComputedStyle(m).paddingRight)))(document.getElementById('conv-layout-main'))
+```
+
+24. **Wide (≥ 1370px or so).** Panel open at its stored width,
+    `.content-2col` shifted right by it, resizer grabbable on the panel's left
+    edge. Reload: still open. Drag the resizer as far left as it goes, then
+    narrow the window: the panel stops growing at whatever keeps the thread at
+    450 and then shrinks with the window instead of squeezing it. Widening
+    gives the dragged width back — it was capped for display, not overwritten.
+25. **Just under the switch (≈ 1150px).** Reload. The panel is **closed**,
+    despite the stored preference, and the conversation has its full width —
+    the subject on one line, not one word per line. This is the case a plain
+    1100px media query gets wrong: the window is wide enough, but the left nav
+    and the customer rail have already taken 540px of it. The toolbar button
+    opens the panel as a drawer over the thread: the layout does not shift, a
+    dimmer covers the conversation, and clicking the dimmer closes it. With
+    the network tab open, none of that fires a `POST /aichatpanel/prefs`.
+26. **Phone (≈ 375px).** Same, full width.
+27. **Resize across the switch.** Wide with the panel open, drag the window
+    narrower: the panel closes itself and the layout un-shifts the moment the
+    thread would go under 450. Widen it again: the panel comes back. Then
+    reload wide — still open, i.e. none of that rewrote the preference.
+
 ### Per-mailbox settings
 
-24. *Mailbox settings » AI Chat Panel*. Set **Reply language** to `German` and
+28. *Mailbox settings » AI Chat Panel*. Set **Reply language** to `German` and
     an extra system prompt.
-25. Back in the conversation, ask for a draft reply — it comes back in German.
-26. Set **Available tools** to *Choose for this mailbox* and untick everything
+29. Back in the conversation, ask for a draft reply — it comes back in German.
+30. Set **Available tools** to *Choose for this mailbox* and untick everything
     but `conversation.get`. Ask the previous-conversations question again: the
     assistant no longer has that tool.
-27. Put it back to *Inherit*.
+31. Put it back to *Inherit*.
 
 ---
 

@@ -7,9 +7,16 @@
  * The panel is position:fixed on the right. When open, a class on <body> shifts
  * the conversation layout left by --aicp-width. When closed the class is absent,
  * which means the module has exactly zero effect on core's layout.
+ *
+ * That shift only happens while there is genuinely room for a third column.
+ * When there is not, module.js puts .aicp-overlay on <body> and the panel
+ * becomes a drawer over the thread instead — see the bottom of this file.
  */
 
 :root {
+    /* The width the panel actually gets. module.js publishes it from the
+       user's stored preference, capped so the message thread keeps 450px
+       beside it — see applyWidth() and maxPanelWidth(). */
     --aicp-width: 380px;
 
     /* Distance from the top and the bottom of the viewport to the panel. The
@@ -570,33 +577,54 @@ body.aicp-resizing {
 
 /* ===================================================================
    Narrow screens: overlay instead of squeezing the thread
+
+   Whether the panel still fits as a column is not something a media query can
+   answer. It depends on the panel's own width and on how much of the window
+   core's two sidebars are taking — 260px of left nav until 991px, 280px of
+   customer rail until 1100px — so a 1145px window is wide enough for the
+   media query and still leaves the thread around 300px. module.js measures
+   all of it and puts .aicp-overlay on <body>; see isOverlay() and
+   maxPanelWidth(). Below core's own 1100px conversation breakpoint the class
+   is always set, because there core has stopped floating
+   #conv-layout-customer beside the thread too.
    =================================================================== */
 
+body.aicp-overlay .aicp-panel {
+    /* Full height: the drawer is modal here, so it does not have to stay clear
+       of the navbar and the footer the way the column does. These beat the
+       var(--aicp-top) / var(--aicp-bottom) in the base rule; updatePanelBounds()
+       only ever writes the custom properties, never inline top/bottom, so there
+       is nothing to fight. */
+    top: 0;
+    bottom: 0;
+    /* A width dragged out to 900px on a desktop must not overflow a tablet. */
+    max-width: 100%;
+    z-index: 1045;
+}
+
+body.aicp-overlay .aicp-resizer {
+    display: none;
+}
+
+/* Do not shift the layout: there is no room for it. */
+body.aicp-overlay.aicp-open .content-2col {
+    margin-right: 0;
+}
+
+body.aicp-overlay.aicp-open .aicp-backdrop {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, .35);
+    z-index: 1040;
+}
+
+/* Phones: the drawer takes the whole screen. */
 @media (max-width: 767px) {
     .aicp-panel {
         width: 100%;
-        top: 0;
-        bottom: 0;
-        z-index: 1045;
-    }
-
-    .aicp-resizer {
-        display: none;
-    }
-
-    /* Do not shift the layout: there is no room for it. */
-    body.aicp-open .content-2col {
-        margin-right: 0;
-    }
-
-    body.aicp-open .aicp-backdrop {
-        display: block;
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, .35);
-        z-index: 1040;
     }
 }

@@ -257,6 +257,12 @@
         lastDayKey: null,
         todayKey: null,
         urls: {},
+        // The stored panel_open preference. Only the wide layout reads or
+        // writes it — see applyLayoutMode().
+        pref_open: false,
+        // The stored panel_width preference. What the panel actually gets is
+        // capped to the window — see applyWidth().
+        pref_width: 380,
         loaded: false,
         busy: false,
         request: null,
@@ -304,9 +310,17 @@
         bindConversationThreads();
         bindRealtimeUpdates();
 
-        if ($el.attr('data-open') === '1') {
+        // The stored preference belongs to the wide layout. Narrower viewports
+        // start closed and are opened deliberately, from the toolbar button.
+        panel.pref_open = $el.attr('data-open') === '1';
+
+        if (panel.pref_open && !isOverlay()) {
             openPanel(false);
         }
+
+        // Seeds last_overlay, so the first resize does not report a transition
+        // that never happened.
+        applyLayoutMode();
     }
 
     function bindPanel() {
@@ -414,11 +428,14 @@
     function openPanel(persist) {
         $('body').addClass('aicp-open');
 
-        if (isNarrow()) {
+        if (isOverlay()) {
             $('.aicp-backdrop').removeClass('hidden');
         }
 
-        if (persist !== false) {
+        // Overlay mode is a per-device, per-visit state: opening the drawer on
+        // a phone must not become the state the desktop comes back to.
+        if (persist !== false && !isOverlay()) {
+            panel.pref_open = true;
             savePrefs({panel_open: 1});
         }
 
@@ -429,14 +446,80 @@
         panel.$input.focus();
     }
 
-    function closePanel() {
+    function closePanel(persist) {
         $('body').removeClass('aicp-open');
         $('.aicp-backdrop').addClass('hidden');
-        savePrefs({panel_open: 0});
+
+        if (persist !== false && !isOverlay()) {
+            panel.pref_open = false;
+            savePrefs({panel_open: 0});
+        }
     }
 
-    function isNarrow() {
-        return $(window).width() < 768;
+    /**
+     * Is the layout too narrow to give the panel a column of its own?
+     *
+     * Two things have to hold. First, core has to be laying the conversation
+     * out in three columns at all: below its own 1100px breakpoint it stops
+     * floating #conv-layout-customer beside the thread, and the panel follows
+     * it. That one is read through matchMedia rather than $(window).width(),
+     * which reports clientWidth and would flip up to a scrollbar's width
+     * before the media query does.
+     *
+     * Second — and this is what a window-width breakpoint alone cannot see —
+     * there has to be room left for the thread once the panel has taken its
+     * minimum. A 1145px window is above the first test and still hopeless: the
+     * left nav takes 260px and the customer rail another 280px, so even the
+     * narrowest panel would leave the thread around 300px and the subject line
+     * wraps one word per line.
+     */
+    function isOverlay() {
+        var narrow = window.matchMedia
+            ? window.matchMedia('(max-width: 1100px)').matches
+            : $(window).width() <= 1100;
+
+        return narrow || maxPanelWidth() < WIDTH_MIN;
+    }
+
+    var last_overlay = null;
+
+    /**
+     * Keep the open state in step with the layout mode when the window is
+     * resized across the breakpoint.
+     *
+     * Entering overlay mode closes the panel, so the thread the user just made
+     * room for is actually readable; leaving it restores whatever the stored
+     * preference says. Neither direction writes that preference.
+     *
+     * The body class is what the stylesheet keys the drawer rules off. It
+     * cannot be a media query: whether the panel still fits depends on the
+     * panel's own width and on how much of the window core's two sidebars are
+     * taking, neither of which CSS can measure.
+     */
+    function applyLayoutMode() {
+        var overlay = isOverlay();
+
+        $('body').toggleClass('aicp-overlay', overlay);
+
+        if (overlay === last_overlay) {
+            return;
+        }
+
+        last_overlay = overlay;
+
+        if (overlay) {
+            if ($('body').hasClass('aicp-open')) {
+                closePanel(false);
+            }
+
+            return;
+        }
+
+        $('.aicp-backdrop').addClass('hidden');
+
+        if (panel.pref_open && !$('body').hasClass('aicp-open')) {
+            openPanel(false);
+        }
     }
 
     var bounds_frame = null;
@@ -474,10 +557,17 @@
 
     /**
      * updatePanelBounds() on a scroll listener, at most once per frame.
+     *
+     * applyLayoutMode() and applyWidth() ride along on the same throttle
+     * instead of adding a second resize listener. The first returns
+     * immediately unless the mode actually changed; the second re-caps the
+     * panel against the new window width.
      */
     function scheduleBoundsUpdate() {
         if (!window.requestAnimationFrame) {
             updatePanelBounds();
+            applyLayoutMode();
+            applyWidth();
             return;
         }
 
@@ -488,19 +578,82 @@
         bounds_frame = window.requestAnimationFrame(function () {
             bounds_frame = null;
             updatePanelBounds();
+            applyLayoutMode();
+            applyWidth();
         });
     }
 
-    function setWidth(width, persist) {
-        width = Math.max(300, Math.min(900, width));
+    /**
+     * The width the message thread has to keep, whatever the panel wants.
+     *
+     * Measured on the thread itself, not on the window: by the time the
+     * conversation reaches #conv-layout-main, core's left nav has taken 260px
+     * and the customer rail another 280px. Subtracting a margin from the
+     * window instead is what let a 1133px window end up with a 225px thread,
+     * one word per line in the subject.
+     */
+    var MIN_THREAD_WIDTH = 450;
 
-        // Drives both the panel width and the shift applied to the
-        // conversation layout, so the two can never disagree.
-        document.documentElement.style.setProperty('--aicp-width', width + 'px');
+    // The range UserPref will accept. Mirrors UserPref::WIDTH_MIN / WIDTH_MAX.
+    var WIDTH_MIN = 300;
+    var WIDTH_MAX = 900;
+
+    function setWidth(width, persist) {
+        // What the user chose. The window may not be wide enough to honour it
+        // right now, but that is applyWidth()'s problem, not something to
+        // write back to the preference.
+        panel.pref_width = Math.max(WIDTH_MIN, Math.min(WIDTH_MAX, width));
+
+        applyWidth();
 
         if (persist) {
-            savePrefs({panel_width: width});
+            savePrefs({panel_width: panel.pref_width});
         }
+    }
+
+    /**
+     * The widest the panel may be and still leave a readable thread.
+     *
+     * Everything it subtracts is measured, not assumed: core's own breakpoints
+     * drop the left nav at 991px and the customer rail at 1100px, and a module
+     * is free to change either. None of it depends on the panel, so there is
+     * no feedback loop between this and the width it produces.
+     *
+     * @return int May come out below WIDTH_MIN, which is isOverlay()'s cue
+     *             that the panel cannot be a column here at all.
+     */
+    function maxPanelWidth() {
+        var $sidebar = $('.sidebar-2col');
+        var sidebar = $sidebar.length && $sidebar.is(':visible') ? $sidebar.outerWidth() : 0;
+
+        // The customer rail is absolutely positioned; the space it occupies is
+        // the padding core reserves for it on the thread column.
+        var main = document.getElementById('conv-layout-main');
+        var rail = main ? parseFloat($(main).css('padding-right')) || 0 : 0;
+
+        return $(window).width() - sidebar - rail - MIN_THREAD_WIDTH;
+    }
+
+    /**
+     * Publish the width the panel actually gets.
+     *
+     * Drives both the panel and the shift applied to the conversation layout,
+     * so the two can never disagree.
+     *
+     * In push mode the stored width is capped to what the thread can spare: a
+     * panel dragged out to 900px on a wide monitor has to give some of that
+     * back on a smaller one. In overlay mode there is nothing to divide up —
+     * the drawer floats over the thread and the stylesheet caps it at the
+     * viewport.
+     */
+    function applyWidth() {
+        var width = panel.pref_width;
+
+        if (!isOverlay()) {
+            width = Math.max(WIDTH_MIN, Math.min(width, maxPanelWidth()));
+        }
+
+        document.documentElement.style.setProperty('--aicp-width', width + 'px');
     }
 
     function bindResizer() {
