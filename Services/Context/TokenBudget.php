@@ -128,7 +128,7 @@ class TokenBudget
     /**
      * Record something that did not fit.
      *
-     * @param string $kind  'messages' | 'provider'
+     * @param string $kind  'messages' | 'provider' | 'draft'
      * @param string $label
      * @param int    $count
      *
@@ -182,6 +182,10 @@ class TokenBudget
                 $this->dropped['messages']['count'],
                 ['count' => $this->dropped['messages']['count']]
             );
+        }
+
+        if (!empty($this->dropped['draft']['count'])) {
+            $parts[] = __('part of your reply draft');
         }
 
         if (!empty($this->dropped['provider']['labels'])) {
