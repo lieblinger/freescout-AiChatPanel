@@ -175,6 +175,7 @@
     "Thinking…": "Denkt nach …",
     "Running :tool…": "Führt :tool aus …",
     "The selected model cannot use tools, so they are disabled.": "Das gewählte Modell kann keine Tools nutzen, daher sind sie deaktiviert.",
+    "The model put its whole answer into its reasoning and returned nothing. Open “Show reasoning” to read it, or ask again.": "Das Modell hat seine gesamte Antwort in den Gedankengang geschrieben und nichts zurückgegeben. Öffnen Sie „Gedankengang anzeigen“, um sie zu lesen, oder fragen Sie erneut.",
     "Show reasoning": "Gedankengang anzeigen",
     "Ran :tool": ":tool ausgeführt",
     ":tool failed": ":tool fehlgeschlagen",

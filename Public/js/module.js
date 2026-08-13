@@ -938,6 +938,17 @@
         // version. The client renderer is only for streaming deltas.
         var body = message.html ? message.html : renderMarkdown(message.body || '');
 
+        // A reasoning model sometimes writes its whole answer into
+        // reasoning_content and returns empty content with finish_reason
+        // "stop" — most often for a short confirmation after a tool ran. The
+        // chain of thought is never promoted into the answer, but an empty
+        // bubble reads as a failure, so say what happened instead.
+        if (!$.trim(message.body || '')) {
+            body = '<em class="text-help">'
+                + escapeHtml(t('reasoning_only', 'The model put its whole answer into its reasoning and returned nothing. Open “Show reasoning” to read it, or ask again.'))
+                + '</em>';
+        }
+
         var html = '<div class="aicp-message aicp-message-assistant" data-body="' + escapeHtml(message.body || '') + '">';
 
         if ($.trim(message.reasoning || '')) {

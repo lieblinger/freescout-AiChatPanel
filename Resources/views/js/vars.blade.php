@@ -48,6 +48,7 @@ if (typeof(LangMessages) == "undefined") {
 		"running_tool": "{{ __j('Running :tool…') }}",
 		"tools_unsupported": "{{ __j('The selected model cannot use tools, so they are disabled.') }}",
 		"show_reasoning": "{{ __j('Show reasoning') }}",
+		"reasoning_only": "{{ __j('The model put its whole answer into its reasoning and returned nothing. Open “Show reasoning” to read it, or ask again.') }}",
 		"tool_ran": "{{ __j('Ran :tool') }}",
 		"tool_failed": "{{ __j(':tool failed') }}",
 
