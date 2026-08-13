@@ -485,15 +485,25 @@ body.aicp-resizing {
    Shortcuts and composer
    =================================================================== */
 
+/* No max-height and no overflow here on purpose. A capped strip put a
+   scrollbar next to the shortcuts as soon as they needed more than three rows
+   — which the shipped default list already does, and German labels do sooner —
+   and hid the rest of them behind it. The strip is flex:0 0 auto, so it takes
+   the few rows it needs and .aicp-messages gives up the space; that one
+   already scrolls. The row count is the admin's to control: it is exactly the
+   number of shortcuts they configured. */
 .aicp-shortcuts {
     flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
     padding: 6px 8px 0;
-    max-height: 84px;
-    overflow-y: auto;
 }
 
 .aicp-shortcut {
-    margin: 0 4px 4px 0;
+    /* min-width:0 lets a long chip shrink to the row and ellipsise instead of
+       forcing a wider one; short chips still share a row. */
+    min-width: 0;
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;

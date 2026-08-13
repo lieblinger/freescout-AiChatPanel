@@ -51,10 +51,19 @@
         </div>
     </div>
 
+    {{--
+        Shortcuts are stored settings, so they are English source strings, not
+        translation keys we control. __() is still the right call: the five
+        shipped defaults have entries in the module's lang files, and a shortcut
+        an admin typed themselves passes through unchanged. The prompt is
+        translated too, so a German agent sends a German prompt and gets a
+        German answer back.
+    --}}
     @if (!empty($shortcuts))
         <div class="aicp-shortcuts">
             @foreach ($shortcuts as $shortcut)
-                <button type="button" class="btn btn-default btn-xs aicp-shortcut" data-prompt="{{ $shortcut }}">{{ $shortcut }}</button>
+                @php $shortcut_text = __($shortcut); @endphp
+                <button type="button" class="btn btn-default btn-xs aicp-shortcut" data-prompt="{{ $shortcut_text }}" title="{{ $shortcut_text }}">{{ $shortcut_text }}</button>
             @endforeach
         </div>
     @endif
@@ -62,7 +71,7 @@
     <div class="aicp-composer">
         <textarea class="aicp-input form-control"
                   rows="3"
-                  placeholder="{{ __('Ask about this conversation… (Ctrl+Enter to send)') }}"></textarea>
+                  placeholder="{{ __('Ask about this conversation…') }}"></textarea>
 
         <div class="aicp-composer-actions">
             <span class="aicp-hint">{{ __('Ctrl+Enter to send') }}</span>

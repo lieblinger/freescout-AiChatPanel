@@ -451,6 +451,14 @@ prefill it; the user still presses send.
 
 Plain strings. Keep them short — they are rendered as buttons.
 
+The panel runs every shortcut through `__()` before it renders it, so a string
+that has a translation entry is shown — and sent to the model — in the agent's
+language, and one that has not passes through as typed. Calling `__()` in your
+filter as well, like the example does, is harmless and keeps the intent visible
+at the call site; what you must not do is translate at registration time and
+cache the result, because the filter runs once per request but the locale is
+per user.
+
 ---
 
 ## The PanelContext object
