@@ -270,6 +270,7 @@
             history: $el.attr('data-url-history'),
             send: $el.attr('data-url-send'),
             confirm: $el.attr('data-url-confirm'),
+            editorHtml: $el.attr('data-url-editor-html'),
             reset: $el.attr('data-url-reset'),
             prefs: $el.attr('data-url-prefs')
         };
@@ -577,6 +578,8 @@
                 conversation_id: panel.conversationId,
                 model: panel.$el.find('.aicp-model').val(),
                 message: text,
+                editor_body: currentEditorBody(),
+                editor_mode: currentEditorMode(),
                 stream: panel.streaming ? 1 : 0
             }
         }).done(function (response) {
@@ -963,7 +966,11 @@
                 + '</em>';
         }
 
-        var html = '<div class="aicp-message aicp-message-assistant" data-body="' + escapeHtml(message.body || '') + '">';
+        // data-id is what the insert buttons post back, so the server can
+        // render this answer for the editor instead of the panel.
+        var html = '<div class="aicp-message aicp-message-assistant"'
+            + (message.id ? ' data-id="' + escapeHtml(String(message.id)) + '"' : '')
+            + ' data-body="' + escapeHtml(message.body || '') + '">';
 
         if ($.trim(message.reasoning || '')) {
             html += '<div class="aicp-reasoning">'
@@ -1192,6 +1199,10 @@
                 conversation_id: panel.conversationId,
                 tool_call_id: pending.tool_call_id,
                 approved: approved ? 1 : 0,
+                // Read again rather than remembered: the agent may have kept
+                // typing while the confirmation was open.
+                editor_body: currentEditorBody(),
+                editor_mode: currentEditorMode(),
                 stream: panel.streaming ? 1 : 0
             }
         }).done(function (response) {
@@ -1221,9 +1232,9 @@
      * agent may have been drafting — and never sends anything.
      */
     function insertIntoEditor($message, asNote) {
-        var html = $message.find('.aicp-bubble').html();
+        var bubble = $message.find('.aicp-bubble').html();
 
-        if (!html) {
+        if (!bubble) {
             return;
         }
 
@@ -1258,7 +1269,69 @@
             return;
         }
 
-        appendToEditor(html);
+        // The bubble is rendered for a browser, not for a thread body: it
+        // keeps <code>, <hr> and <del>, which core's purifier drops the moment
+        // the draft is displayed or sent. Ask the server for the editor render
+        // of the same answer instead, and fall back to the bubble only when
+        // there is no message id to ask about.
+        var id = $message.attr('data-id');
+
+        if (!id || !panel.urls.editorHtml) {
+            appendToEditor(bubble);
+            return;
+        }
+
+        var $buttons = $message.find('.aicp-action-reply, .aicp-action-note').prop('disabled', true);
+
+        $.ajax({
+            url: panel.urls.editorHtml,
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                _token: csrf(),
+                conversation_id: panel.conversationId,
+                message_id: id
+            }
+        }).done(function (response) {
+            appendToEditor(response && response.html ? response.html : bubble);
+        }).fail(function () {
+            appendToEditor(bubble);
+        }).always(function () {
+            $buttons.prop('disabled', false);
+        });
+    }
+
+    /**
+     * What the agent currently has in the reply editor.
+     *
+     * Sent with every turn so the assistant can answer "make what I wrote more
+     * formal" — the draft lives in the browser and may never have been saved.
+     * Empty when the form is closed or holds nothing but Summernote's empty
+     * paragraph.
+     */
+    function currentEditorBody() {
+        var $body = $('#body');
+
+        if (!$body.length || !$body.data('summernote')) {
+            return '';
+        }
+
+        if ($('.conv-reply-block').hasClass('hidden')) {
+            return '';
+        }
+
+        var html = $body.summernote('code') || '';
+
+        if (html === '<div><br></div>' || $.trim($('<div>').html(html).text()) === '') {
+            return '';
+        }
+
+        // The server caps this too; the point here is not to post a megabyte.
+        return html.slice(0, 100000);
+    }
+
+    function currentEditorMode() {
+        return (typeof getReplyFormMode === 'function') ? getReplyFormMode() : '';
     }
 
     function appendToEditor(html) {

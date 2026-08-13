@@ -14,6 +14,8 @@ use Modules\AiChatPanel\Services\Agent\AgentOutcome;
 use Modules\AiChatPanel\Services\Context\ContextBuilder;
 use Modules\AiChatPanel\Services\Llm\CurlLlmClient;
 use Modules\AiChatPanel\Services\Llm\LlmException;
+use Modules\AiChatPanel\Services\Markdown\HtmlToMarkdown;
+use Modules\AiChatPanel\Services\Markdown\MarkdownToHtml;
 use Modules\AiChatPanel\Services\MarkdownRenderer;
 use Modules\AiChatPanel\Services\PanelContext;
 use Modules\AiChatPanel\Services\Settings;
@@ -61,6 +63,54 @@ class ChatController extends Controller
             'models'   => $this->modelChoices(),
             'tools'    => $this->toolSummary($context),
             'pending'  => $this->pendingWriteFor($chat),
+        ]);
+    }
+
+    /**
+     * One stored answer, as the HTML the reply editor wants.
+     *
+     * The panel's own bubble HTML cannot be reused for this. It is rendered
+     * with the panel profile, which allows <code>, <hr> and <del> — exactly the
+     * three things core's purifier drops when the draft is displayed or sent,
+     * so inserting a bubble silently loses inline code, rules and
+     * strikethrough. For a streaming bubble it is marked + DOMPurify output,
+     * which is explicitly never the source of truth.
+     *
+     * @param Request $request
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function editorHtml(Request $request)
+    {
+        try {
+            $context = $this->resolve($request);
+
+            $message = Message::find((int) $request->input('message_id'));
+
+            if (!$message || $message->role != Message::ROLE_ASSISTANT) {
+                throw new \Exception('not an assistant message');
+            }
+
+            $chat = $message->chat;
+
+            // A chat belongs to one conversation AND one user. Checking only
+            // the conversation would let one agent read another's chat.
+            if (!$chat
+                || $chat->conversation_id != $context->conversation->id
+                || $chat->user_id != $context->user->id) {
+                throw new \Exception('not this user\'s message');
+            }
+
+            if ($message->status == Message::STATUS_ERROR) {
+                throw new \Exception('failed message');
+            }
+        } catch (\Exception $e) {
+            return $this->denied($e);
+        }
+
+        return \Response::json([
+            'status' => 'success',
+            'html'   => MarkdownToHtml::toEditorHtml($message->body),
         ]);
     }
 
@@ -123,15 +173,18 @@ class ChatController extends Controller
         $chat->model = $model;
         $chat->save();
 
+        $draft = $this->editorDraft($request);
+        $mode = $this->editorMode($request);
+
         if ($request->input('stream')) {
             return \Response::json([
                 'status'     => 'success',
                 'messages'   => [$user_message->toPanelArray()],
-                'stream_url' => $this->openStream($context, $chat, $model),
+                'stream_url' => $this->openStream($context, $chat, $model, $draft, $mode),
             ]);
         }
 
-        return $this->runAndRespond($context, $chat, $model, [$user_message->toPanelArray()]);
+        return $this->runAndRespond($context, $chat, $model, [$user_message->toPanelArray()], $draft, $mode);
     }
 
     /**
@@ -175,7 +228,13 @@ class ChatController extends Controller
         }
 
         return $this->sse(function () use ($context, $chat, $state) {
-            $this->streamTurn($context, $chat, $state['model']);
+            $this->streamTurn(
+                $context,
+                $chat,
+                $state['model'],
+                isset($state['editor_draft']) ? $state['editor_draft'] : '',
+                isset($state['editor_mode']) ? $state['editor_mode'] : 'reply'
+            );
         });
     }
 
@@ -185,18 +244,26 @@ class ChatController extends Controller
      * @param PanelContext $context
      * @param Chat         $chat
      * @param string       $model
+     * @param string       $draft Markdown of the reply editor's content.
+     * @param string       $mode  'reply' | 'note'
      *
      * @return string
      */
-    protected function openStream(PanelContext $context, Chat $chat, $model)
+    protected function openStream(PanelContext $context, Chat $chat, $model, $draft = '', $mode = 'reply')
     {
         $token = \Str::random(40);
 
+        // The draft has to travel in the cache entry: the system prompt is
+        // built in stream(), which is a different request and has no access to
+        // the browser's editor. Markdown rather than the editor's HTML, because
+        // it is a fraction of the size.
         \Cache::put('aichatpanel.stream.'.$token, [
             'user_id'         => $context->user->id,
             'conversation_id' => $context->conversation->id,
             'chat_id'         => $chat->id,
             'model'           => $model,
+            'editor_draft'    => $draft,
+            'editor_mode'     => $mode,
         ], 5);
 
         return route('aichatpanel.chat.stream', ['token' => $token]);
@@ -208,10 +275,12 @@ class ChatController extends Controller
      * @param PanelContext $context
      * @param Chat         $chat
      * @param string       $model
+     * @param string       $draft
+     * @param string       $mode
      *
      * @return void
      */
-    protected function streamTurn(PanelContext $context, Chat $chat, $model)
+    protected function streamTurn(PanelContext $context, Chat $chat, $model, $draft = '', $mode = 'reply')
     {
         try {
             $client = CurlLlmClient::fromSettings();
@@ -225,6 +294,7 @@ class ChatController extends Controller
         $history = $chat->fresh()->toApiMessages();
 
         $builder = new ContextBuilder($context);
+        $builder->setEditorDraft($draft, $mode);
         $system = $builder->build($this->estimateHistoryTokens($history));
 
         $messages = array_merge(
@@ -479,15 +549,20 @@ class ChatController extends Controller
 
         $model = $chat->model ?: $this->resolveModel($request, $context, $chat);
 
+        // Asked for again rather than remembered from send(): the agent may
+        // have carried on typing while the confirmation was open.
+        $draft = $this->editorDraft($request);
+        $mode = $this->editorMode($request);
+
         if ($request->input('stream')) {
             return \Response::json([
                 'status'     => 'success',
                 'messages'   => $new_panel_messages,
-                'stream_url' => $this->openStream($context, $chat, $model),
+                'stream_url' => $this->openStream($context, $chat, $model, $draft, $mode),
             ]);
         }
 
-        return $this->runAndRespond($context, $chat, $model, $new_panel_messages);
+        return $this->runAndRespond($context, $chat, $model, $new_panel_messages, $draft, $mode);
     }
 
     /**
@@ -569,8 +644,14 @@ class ChatController extends Controller
      *
      * @return \Illuminate\Http\JsonResponse
      */
-    protected function runAndRespond(PanelContext $context, Chat $chat, $model, array $prefix_messages)
-    {
+    protected function runAndRespond(
+        PanelContext $context,
+        Chat $chat,
+        $model,
+        array $prefix_messages,
+        $draft = '',
+        $mode = 'reply'
+    ) {
         try {
             $client = CurlLlmClient::fromSettings();
         } catch (LlmException $e) {
@@ -582,6 +663,7 @@ class ChatController extends Controller
         $history = $chat->fresh()->toApiMessages();
 
         $builder = new ContextBuilder($context);
+        $builder->setEditorDraft($draft, $mode);
         $system = $builder->build($this->estimateHistoryTokens($history));
 
         $messages = array_merge(
@@ -629,6 +711,49 @@ class ChatController extends Controller
             'duration' => round($outcome->duration, 2),
             'pending'  => $outcome->pending ? $outcome->pending->toPanelArray() : null,
         ]);
+    }
+
+    /**
+     * The reply editor's current content, as Markdown, for the prompt.
+     *
+     * Converted here rather than in the browser: the server render is the
+     * source of truth everywhere else in this module, and Markdown is a
+     * fraction of the size of the editor's HTML when it has to be cached for
+     * the streaming request.
+     *
+     * @param Request $request
+     *
+     * @return string
+     */
+    protected function editorDraft(Request $request)
+    {
+        $html = (string) $request->input('editor_body', '');
+
+        if (mb_strlen($html) > 200000) {
+            $html = mb_substr($html, 0, 200000);
+        }
+
+        if (trim(strip_tags($html)) === '') {
+            return '';
+        }
+
+        $markdown = HtmlToMarkdown::fromEditor($html);
+
+        if (mb_strlen($markdown) > 20000) {
+            $markdown = mb_substr($markdown, 0, 20000)."\n\n[…truncated]";
+        }
+
+        return $markdown;
+    }
+
+    /**
+     * @param Request $request
+     *
+     * @return string 'reply' | 'note'
+     */
+    protected function editorMode(Request $request)
+    {
+        return $request->input('editor_mode') === 'note' ? 'note' : 'reply';
     }
 
     /**
