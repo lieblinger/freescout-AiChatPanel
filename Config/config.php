@@ -84,7 +84,8 @@ return [
         'max_tool_seconds'    => ['default' => 60],
 
         // -- Prompt shortcuts ----------------------------------------------
-        // Rendered above the input. They only prefill; the user still sends.
+        // Rendered above the input. Clicking one sends it, so each has to be a
+        // complete prompt rather than an opening the user finishes.
         'prompt_shortcuts'    => ['default' => [
             'Draft a reply to the latest customer message.',
             'Summarise this thread in five bullet points.',

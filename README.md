@@ -174,7 +174,7 @@ and HTMLPurifier, both of which already ship with FreeScout.
 | Include internal notes | Default on; per-mailbox overridable |
 | Send personal data | Default on; per-mailbox overridable. Governs whether postal addresses, phone numbers, social profiles, customer notes and the agent's own contact details may be sent to the endpoint. Not an access control — all of it is already visible in the conversation sidebar to anyone who can open the ticket — but a limit on what leaves your server |
 | System prompt | Appended to the built-in instructions |
-| Prompt shortcuts | One per line; rendered as buttons that prefill the input |
+| Prompt shortcuts | One per line; rendered as buttons that send the prompt on click |
 
 **Context providers / Tools** — individual toggles for everything registered,
 including tools from other modules. Plus:

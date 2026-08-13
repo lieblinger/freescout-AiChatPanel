@@ -436,8 +436,9 @@ be read.
 
 ## Prompt shortcuts
 
-The cheapest extension point. Shortcuts are buttons above the input that
-prefill it; the user still presses send.
+The cheapest extension point. Shortcuts are buttons above the input. Clicking
+one sends it straight away, so write each shortcut as a prompt that stands on
+its own rather than as an opening the user is expected to finish.
 
 ```php
 \Eventy::addFilter('aichatpanel.prompt_shortcuts', function ($shortcuts, $context) {

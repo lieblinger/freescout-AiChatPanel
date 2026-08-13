@@ -137,6 +137,60 @@ class PromptShortcutsTest extends AiChatPanelTestCase
     }
 
     /**
+     * Clicking a shortcut sends it rather than parking it in the input.
+     *
+     * It goes through sendMessage() rather than posting directly, because that
+     * is where the busy and pending-confirmation guards live: when either one
+     * refuses, the prompt has already been written into the input and stays
+     * there for the user to send by hand.
+     *
+     * @return void
+     */
+    public function testClickingAShortcutSendsIt()
+    {
+        $handler = $this->shortcutClickHandler();
+
+        $this->assertStringContainsString(
+            'sendMessage();',
+            $handler,
+            'The shortcut click handler no longer sends, so a shortcut only prefills the input '
+                .'again and the user has to press send.'
+        );
+
+        $this->assertStringContainsString(
+            'panel.$input.val(',
+            $handler,
+            'The handler no longer writes the prompt into the input, so a send refused by the '
+                .'busy or pending guard loses the click entirely.'
+        );
+    }
+
+    /**
+     * The body of the .aicp-shortcut click handler, and nothing else.
+     *
+     * Sliced rather than matched with one regular expression: a pattern loose
+     * enough to span the handler is also loose enough to run past its closing
+     * brace and find sendMessage() in some later function, which passes while
+     * the handler itself does nothing.
+     *
+     * @return string
+     */
+    protected function shortcutClickHandler()
+    {
+        $js = file_get_contents(__DIR__.'/../Public/js/module.js');
+
+        $start = strpos($js, "'.aicp-shortcut'");
+        $this->assertNotFalse($start, 'There is no .aicp-shortcut click handler in module.js at all.');
+
+        // The handler is bound at one indent level inside its function, so its
+        // closing brace is the first one at that exact column.
+        $end = strpos($js, "\n        });", $start);
+        $this->assertNotFalse($end, 'The .aicp-shortcut handler is no longer a single bound function.');
+
+        return substr($js, $start, $end - $start);
+    }
+
+    /**
      * @param array $shortcuts
      *
      * @return string

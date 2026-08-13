@@ -196,7 +196,7 @@
 
         <div class="col-sm-6">
             <textarea id="aichatpanel_prompt_shortcuts" class="form-control" rows="6" name="settings[aichatpanel.prompt_shortcuts]">{{ old('settings[aichatpanel.prompt_shortcuts]', $prompt_shortcuts) }}</textarea>
-            <p class="help-block">{{ __('One per line. Shown as buttons above the chat input. They only prefill the input; the user still sends.') }}</p>
+            <p class="help-block">{{ __('One per line. Shown as buttons above the chat input. Clicking one sends it straight away, so write each as a complete prompt.') }}</p>
         </div>
     </div>
 

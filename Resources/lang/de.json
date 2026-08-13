@@ -34,7 +34,7 @@
     "System prompt": "System-Prompt",
     "Added to the built-in instructions. Leave empty to use the defaults only. Mailboxes can append their own text.": "Wird zu den eingebauten Anweisungen hinzugefügt. Leer lassen, um nur die Vorgaben zu verwenden. Postfächer können eigenen Text ergänzen.",
     "Prompt shortcuts": "Prompt-Kürzel",
-    "One per line. Shown as buttons above the chat input. They only prefill the input; the user still sends.": "Eines pro Zeile. Werden als Schaltflächen über dem Eingabefeld angezeigt. Sie füllen nur das Eingabefeld vor; abgeschickt wird weiterhin vom Benutzer.",
+    "One per line. Shown as buttons above the chat input. Clicking one sends it straight away, so write each as a complete prompt.": "Eines pro Zeile. Werden als Schaltflächen über dem Eingabefeld angezeigt. Ein Klick schickt das Kürzel sofort ab, formulieren Sie es also als vollständigen Prompt.",
     "Context providers": "Kontext-Quellen",
     "Enabled providers": "Aktive Kontext-Quellen",
     "Available providers": "Verfügbare Kontext-Quellen",

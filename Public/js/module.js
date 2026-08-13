@@ -371,7 +371,14 @@
 
         panel.$el.on('click', '.aicp-shortcut', function (e) {
             e.preventDefault();
+
+            // Fill the input first, then send. sendMessage() reads the input
+            // and refuses while the panel is busy or a write is waiting to be
+            // confirmed; going through it rather than around it means the
+            // prompt is left sitting in the box in those two cases, so the
+            // click is never silently swallowed.
             panel.$input.val($(this).attr('data-prompt')).focus();
+            sendMessage();
         });
 
         // Delegated: message action buttons are rendered dynamically.
