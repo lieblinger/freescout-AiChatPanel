@@ -3,6 +3,15 @@
 Newest first. No release so far has required a migration, removed a setting or
 changed an endpoint.
 
+## 1.2.3
+
+* Fix - The assistant no longer says it has looked at a photo or a document. Attachments reach it as a filename and a type only, and it was reading the filename as if it had seen the file.
+* Fix - The assistant no longer writes that documents are attached to a draft. It cannot attach anything, and now says what the agent should attach instead.
+* Fix - The assistant no longer reports an action as done — an order placed, an enquiry passed to a colleague — unless the conversation or the agent says it was, and promises nothing on the agent's behalf.
+* Fix - On a conversation with no messages yet, the assistant writes only what the agent gave it and asks for the rest, instead of inventing the background of a first mail.
+* Fix - A summary, an explanation or an analysis is answered in the chat panel. It used to be able to end up written into an internal note nobody asked for.
+* Change - Text you type that reads as something meant for the customer is offered as a draft reply, rewritten to the mailbox's language and tone. It offers every time and waits for your yes — it never drafts from your text unasked.
+
 ## 1.2.2
 
 * Fix - Panel strings rendered by JavaScript are translated on every install. They came from a generated `vars.js` that no FreeScout install path builds and that is not in the release zip, so a German panel showed its JavaScript half in English.
