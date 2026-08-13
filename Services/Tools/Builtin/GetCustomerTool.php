@@ -30,9 +30,12 @@ class GetCustomerTool extends AbstractTool
     public function description()
     {
         return 'Get the stored profile of the customer on the current conversation: name, '
-            .'email addresses, company, job title, phone numbers, address and website. '
-            .'Use this when you need contact details or need to address the customer correctly. '
-            .'Do not guess these values from the message text — read them here.';
+            .'all email addresses, all phone numbers with their type, postal address, city, '
+            .'state, postal code, country, company, job title, websites, social profiles and '
+            .'the internal notes kept about them. '
+            .'Call this whenever a reply needs a contact detail — a phone number to quote, an '
+            .'address to confirm, the right form of the name. These are the stored values; do '
+            .'not guess them from the message text and do not reformat them.';
     }
 
     /**
@@ -77,21 +80,46 @@ class GetCustomerTool extends AbstractTool
             return ToolResult::error('This conversation has no customer linked.');
         }
 
+        // The reduced set, for installs that would rather not send a postal
+        // address and a free-text notes field to a third-party endpoint. This
+        // is a data-processing choice, not an access-control one: everything in
+        // the full set below is already on screen in the conversation sidebar
+        // (core/resources/views/customers/profile_snippet.blade.php) for anyone
+        // who can open the conversation.
+        $full = (bool) $context->setting('send_personal_data');
+
         $data = [
             'name'      => $customer->getFullName(true),
             'emails'    => $customer->getEmailsAsArray(),
             'company'   => $customer->company ?: null,
             'job_title' => $customer->job_title ?: null,
             'city'      => $customer->city ?: null,
-            'country'   => $customer->country ?: null,
-            'notes'     => $customer->notes ? \Illuminate\Support\Str::limit($customer->notes, 1000) : null,
+            'country'   => $full ? ($customer->getCountryName() ?: $customer->country) : $customer->country,
         ];
 
-        // phones and websites are JSON columns holding [{'value' => ...}, ...];
-        // core exposes accessors for both.
+        if ($full) {
+            $data['address'] = $customer->address ?: null;
+            $data['state'] = $customer->state ?: null;
+            $data['zip'] = $customer->zip ?: null;
+            $data['channel'] = $customer->getChannelName() ?: null;
+            $data['customer_since'] = $customer->created_at ? $customer->created_at->toDateString() : null;
+        }
+
+        // Match the per-message cap in GetConversationTool so one long notes
+        // field cannot dominate the remaining context.
+        $data['notes'] = $customer->notes
+            ? \Illuminate\Support\Str::limit($customer->notes, $full ? 4000 : 1000)
+            : null;
+
+        // phones, websites and social profiles are JSON columns holding
+        // [{'value' => ...}, ...]; core exposes accessors for all three.
         try {
-            $data['phones'] = $this->values($customer->getPhones());
+            $data['phones'] = $full ? $this->typed($customer->getPhones(), \App\Customer::$phone_types) : $this->values($customer->getPhones());
             $data['websites'] = $this->values($customer->getWebsites());
+
+            if ($full) {
+                $data['social_profiles'] = $this->typed($customer->getSocialProfiles(), \App\Customer::$social_types);
+            }
         } catch (\Exception $e) {
             // Not worth failing the whole lookup over an optional field.
         }
@@ -103,6 +131,45 @@ class GetCustomerTool extends AbstractTool
         });
 
         return ToolResult::ok($data, __('Read the customer profile'));
+    }
+
+    /**
+     * Core's [{'type' => 1, 'value' => ...}] JSON shape, with the numeric type
+     * resolved to a name.
+     *
+     * The maps passed in are core's own $phone_types / $social_types, which
+     * hold untranslated lowercase names ('work', 'mobile'). Deliberately not
+     * getPhoneTypeName(), which returns the translated UI label — the model
+     * should see a stable token, not whatever the agent's locale renders.
+     *
+     * @param mixed $entries
+     * @param array $types
+     *
+     * @return array
+     */
+    protected function typed($entries, array $types)
+    {
+        if (!is_array($entries)) {
+            return [];
+        }
+
+        $result = [];
+
+        foreach ($entries as $entry) {
+            if (!is_array($entry) || empty($entry['value'])) {
+                continue;
+            }
+
+            $row = ['value' => $entry['value']];
+
+            if (isset($entry['type']) && isset($types[$entry['type']])) {
+                $row['type'] = $types[$entry['type']];
+            }
+
+            $result[] = $row;
+        }
+
+        return $result;
     }
 
     /**

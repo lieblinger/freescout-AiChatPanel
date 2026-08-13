@@ -65,9 +65,14 @@ class ContextBuilder
         $this->budget->reserve(max(0, (int) $reserve_for_history));
 
         // Metadata is small and always worth having; the model is much less
-        // useful without knowing who it is talking about.
+        // useful without knowing who it is talking about — or, for the agent
+        // block, who it is talking to. Both are reserved before the thread
+        // history so a long conversation can never crowd them out.
         $metadata = $this->metadata();
         $this->budget->reserve(TokenBudget::estimate($metadata));
+
+        $agent = $this->agent();
+        $this->budget->reserve(TokenBudget::estimate($agent));
 
         // Providers are asked before the thread so that a deliberately added
         // block is not crowded out by an enormous mail history; they are
@@ -77,6 +82,10 @@ class ContextBuilder
         $thread = $this->threadHistory();
 
         $sections = [$instructions, $metadata];
+
+        if ($agent !== '') {
+            $sections[] = $agent;
+        }
 
         if ($thread !== '') {
             $sections[] = $thread;
@@ -114,6 +123,8 @@ class ContextBuilder
         $lines[] = '- Be concise and concrete. Prefer the facts in the conversation over general advice.';
         $lines[] = '- If the conversation does not contain enough information to answer, say so plainly instead of inventing details.';
         $lines[] = '- Never invent order numbers, prices, dates, policies or names. If you need a fact you do not have, say what is missing.';
+        $lines[] = '- Contact details for the agent and the customer are stored data. Quote them exactly; never guess or reformat them.';
+        $lines[] = '- Do not end drafts with a sign-off or signature block: the help desk appends the agent\'s signature on send, so yours would be a duplicate.';
         $lines[] = '- Answer in Markdown.';
         $lines[] = '';
         $lines[] = 'Untrusted data:';
@@ -195,6 +206,53 @@ class ContextBuilder
         }
 
         return "Conversation metadata:\n".implode("\n", $rows);
+    }
+
+    /**
+     * Who the assistant is helping, and how to reach them.
+     *
+     * Inline rather than behind a tool, unlike the customer profile: it is a
+     * handful of tokens, it is relevant to nearly every draft, and a model with
+     * tools switched off must still have it. Behind a tool the model has to
+     * first decide the lookup is worth doing, and when it does not it hedges —
+     * which is the failure this block exists to fix.
+     *
+     * No authorisation check: this is the acting user's own record, which
+     * core's UserPolicy::view() permits unconditionally
+     * (core/app/Policies/UserPolicy.php:22).
+     *
+     * @return string
+     */
+    protected function agent()
+    {
+        $user = $this->context->user;
+
+        if (!$user) {
+            return '';
+        }
+
+        $rows = [];
+
+        $rows[] = 'Name: '.$this->sanitise($user->getFullName());
+
+        // Everything below is optional on a user record. Empty rows are worse
+        // than absent ones — the model reads "Phone:" with nothing after it as
+        // a fact about the phone number.
+        if ($this->context->setting('send_personal_data')) {
+            if ($user->email) {
+                $rows[] = 'Email: '.$this->sanitise($user->email);
+            }
+
+            if ($user->phone) {
+                $rows[] = 'Phone: '.$this->sanitise($user->phone);
+            }
+
+            if ($user->job_title) {
+                $rows[] = 'Job title: '.$this->sanitise($user->job_title);
+            }
+        }
+
+        return "You are helping this agent:\n".implode("\n", $rows);
     }
 
     /**

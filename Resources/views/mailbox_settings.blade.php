@@ -91,6 +91,25 @@
                     </div>
 
                     <div class="form-group">
+                        <label class="col-sm-3 control-label">{{ __('Send personal data') }}</label>
+
+                        <div class="col-sm-6">
+                            <div class="controls">
+                                @foreach ([
+                                    'inherit' => __('Inherit (:value)', ['value' => $globals['send_personal_data'] ? __('on') : __('off')]),
+                                    '1'       => __('On'),
+                                    '0'       => __('Off'),
+                                ] as $value => $label)
+                                    <label class="radio inline plain" for="send_personal_data_{{ $value }}">
+                                        <input type="radio" name="send_personal_data" value="{{ $value }}" id="send_personal_data_{{ $value }}" @if ($tri('send_personal_data') === (string) $value)checked="checked"@endif> {{ $label }}
+                                    </label>
+                                @endforeach
+                            </div>
+                            <p class="help-block">{{ __('Whether postal addresses, phone numbers, social profiles, customer notes and the agent\'s own contact details may be sent to the endpoint. Turn it off for a mailbox whose data must not leave your server.') }}</p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
                         <label for="system_prompt_addition" class="col-sm-3 control-label">{{ __('Extra system prompt') }}</label>
 
                         <div class="col-sm-6">

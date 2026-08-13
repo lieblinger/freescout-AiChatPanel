@@ -197,8 +197,11 @@ class ContextBuilderTest extends AiChatPanelTestCase
         }, 20, 2);
 
         $this->setSettings([
+            // Enough for the fixed prompt (instructions, metadata, the agent
+            // block) plus one provider, not two. Tracks the size of the fixed
+            // part, so it needs raising whenever that grows.
             'context_providers'  => ['test.important', 'test.optional'],
-            'max_context_tokens' => 700,
+            'max_context_tokens' => 900,
         ]);
 
         $built = (new ContextBuilder($this->context()))->build(0);

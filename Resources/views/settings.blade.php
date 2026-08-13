@@ -166,6 +166,22 @@
         </div>
     </div>
 
+    <div class="form-group">
+        <label for="aichatpanel_send_personal_data" class="col-sm-2 control-label">{{ __('Send personal data') }}</label>
+
+        <div class="col-sm-6">
+            <div class="controls">
+                <div class="onoffswitch-wrap">
+                    <div class="onoffswitch">
+                        <input type="checkbox" name="settings[aichatpanel.send_personal_data]" value="1" id="aichatpanel_send_personal_data" class="onoffswitch-checkbox" @if (old('settings[aichatpanel.send_personal_data]', $settings['aichatpanel.send_personal_data']))checked="checked"@endif>
+                        <label class="onoffswitch-label" for="aichatpanel_send_personal_data"></label>
+                    </div>
+                </div>
+            </div>
+            <p class="help-block">{{ __('Allows postal addresses, phone numbers, social profiles, customer notes and the agent\'s own contact details to be sent to the endpoint, so the assistant can quote them instead of guessing. Turning this off does not restrict anyone in FreeScout — all of it is already visible in the conversation sidebar. It restricts what leaves your server. Each mailbox can override it.') }}</p>
+        </div>
+    </div>
+
     <div class="form-group{{ $errors->has('settings[aichatpanel.system_prompt]') ? ' has-error' : '' }}">
         <label for="aichatpanel_system_prompt" class="col-sm-2 control-label">{{ __('System prompt') }}</label>
 

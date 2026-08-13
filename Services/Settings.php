@@ -41,6 +41,7 @@ class Settings
         'reply_tone',
         'include_notes',
         'include_signature',
+        'send_personal_data',
         'tools_enabled',
         'context_providers',
     ];

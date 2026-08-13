@@ -37,13 +37,14 @@ Licence: **AGPL-3.0-or-later**.
 |---|---|---|
 | `conversation.list_customer_conversations` | read | other conversations of this customer |
 | `conversation.get` | read | one conversation by number, with its messages |
-| `customer.get` | read | the stored customer profile |
+| `customer.get` | read | the full stored customer profile, including postal address, typed phone numbers and social profiles |
 | `conversation.add_note` | write | add an internal note |
 | `conversation.set_status` | write | change the conversation status |
 | `conversation.create_draft_reply` | write | save a draft reply (never sends) |
 
-All six start **disabled**. Read tools run without asking; every write tool is
-confirmed in the panel first.
+The three read tools are on by default; the write tools start **disabled** and
+are gated behind the "Allow write tools" master switch. Read tools run without
+asking; every write tool is confirmed in the panel first.
 
 ---
 
@@ -110,6 +111,7 @@ licences.
 |---|---|
 | Max context tokens | Budget for history plus extra context. Overflow drops the oldest messages and the panel says so |
 | Include internal notes | Default on; per-mailbox overridable |
+| Send personal data | Default on; per-mailbox overridable. Governs whether postal addresses, phone numbers, social profiles, customer notes and the agent's own contact details may be sent to the endpoint. Not an access control — all of it is already visible in the conversation sidebar to anyone who can open the ticket — but a limit on what leaves your server |
 | System prompt | Appended to the built-in instructions |
 | Prompt shortcuts | One per line; rendered as buttons that prefill the input |
 
@@ -135,8 +137,8 @@ including tools from other modules. Plus:
 ### Per mailbox — *Mailbox settings » AI Chat Panel*
 
 Enable/disable, extra system prompt, reply language, reply tone, include
-internal notes, strip signatures, and which tools and providers are available.
-Every setting can be left on **Inherit**.
+internal notes, strip signatures, send personal data, and which tools and
+providers are available. Every setting can be left on **Inherit**.
 
 A mailbox can narrow the global tool selection, never widen it.
 

@@ -55,6 +55,12 @@ return [
         // Strip the mailbox signature from agent replies before they go into
         // the prompt. Per-mailbox overridable; detection is best-effort.
         'include_signature'   => ['default' => true],
+        // Whether stored personal data — postal address, phone numbers, social
+        // profiles, customer notes, the agent's own contact details — may be
+        // sent to the endpoint. Not an access-control setting: all of it is
+        // already visible in FreeScout to anyone who can open the conversation.
+        // This is about what leaves the building to a third-party processor.
+        'send_personal_data'  => ['default' => true],
         'context_providers'   => ['default' => ['aichatpanel.previous_conversations']],
 
         // -- Tools ---------------------------------------------------------

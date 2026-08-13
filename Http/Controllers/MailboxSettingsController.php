@@ -41,10 +41,11 @@ class MailboxSettingsController extends Controller
             'tool_catalogue'     => ToolRegistry::catalogue(),
             'provider_catalogue' => ProviderRegistry::catalogue(),
             'globals'            => [
-                'enabled'           => (bool) Settings::get('enabled'),
-                'include_notes'     => (bool) Settings::get('include_notes'),
-                'tools_enabled'     => (array) Settings::get('tools_enabled'),
-                'context_providers' => (array) Settings::get('context_providers'),
+                'enabled'            => (bool) Settings::get('enabled'),
+                'include_notes'      => (bool) Settings::get('include_notes'),
+                'send_personal_data' => (bool) Settings::get('send_personal_data'),
+                'tools_enabled'      => (array) Settings::get('tools_enabled'),
+                'context_providers'  => (array) Settings::get('context_providers'),
             ],
         ]);
     }
@@ -66,7 +67,7 @@ class MailboxSettingsController extends Controller
         // A tri-state per setting: inherit (absent), on, off. "inherit" has to
         // be a real option, otherwise saving this page would silently pin every
         // mailbox to whatever the global defaults happened to be that day.
-        foreach (['enabled', 'include_notes', 'include_signature'] as $flag) {
+        foreach (['enabled', 'include_notes', 'include_signature', 'send_personal_data'] as $flag) {
             $value = $request->input($flag, 'inherit');
 
             if ($value === 'inherit') {
