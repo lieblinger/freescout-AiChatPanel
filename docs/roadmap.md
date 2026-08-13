@@ -23,15 +23,24 @@ it", which is honest.
 
 There is no auto-reply, no background answering, no "send" button anywhere in
 the panel, and no queue job that could produce one. `conversation.create_draft_reply`
-saves a draft thread and stops. This is a product boundary, not a missing
-feature.
+saves a draft thread and stops; `conversation.update_draft` rewrites one and
+stops. This is a product boundary, not a missing feature.
+
+The same boundary is why editing is limited to **drafts**. A sent reply and a
+published note have been read by someone; changing them after the fact is a
+different act from revising something nobody has seen, so the module does not do
+it even though core's own thread editor can. Discarding a draft is left out for a
+related reason: it is the one action that destroys written work irrecoverably,
+and the Discard button sits next to every draft already.
 
 ### A "trust all write tools" switch
 
 Individually named write tools can be exempted from confirmation. There is
-deliberately no global switch, and `conversation.create_draft_reply` cannot be
-exempted at all. A single checkbox that turns off every confirmation is the kind
-of thing that gets ticked once during a demo and never unticked.
+deliberately no global switch, and neither `conversation.create_draft_reply` nor
+`conversation.update_draft` can be exempted at all — writing customer-facing text
+unattended and silently overwriting it unattended are the same risk from two
+directions. A single checkbox that turns off every confirmation is the kind of
+thing that gets ticked once during a demo and never unticked.
 
 ### Cross-conversation and cross-mailbox search
 
@@ -142,6 +151,10 @@ Honest list of things that work but could be better.
   answered with "not executed, ask again", because the endpoint requires every
   tool call to get a reply and queueing two confirmation dialogs is worse UX than
   asking the model to try again.
+- **The panel does not refresh the conversation after a write.** A draft it
+  created or rewrote appears in the thread on the next page load. True of every
+  write tool, most visible with drafts, and the reason the manual test script
+  says "reload" after each approval.
 - **The model picker lists what the endpoint reports**, cached for five minutes.
   A model added to the endpoint mid-session takes up to five minutes to appear.
   It is hidden entirely when there is only one model to choose from.

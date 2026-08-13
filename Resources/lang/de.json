@@ -51,7 +51,7 @@
     "Allow write tools": "Schreibende Tools erlauben",
     "Master switch. With this off, no tool that changes data is offered to the model, whatever is ticked above.": "Hauptschalter. Ist er aus, wird dem Modell kein datenveränderndes Tool angeboten, unabhängig von den Häkchen oben.",
     "Run without confirmation": "Ohne Bestätigung ausführen",
-    "Named write tools that may run without asking the user. Leave empty unless you have a reason. There is deliberately no option to exempt all write tools, and drafting a reply can never be exempted.": "Namentlich benannte schreibende Tools, die ohne Rückfrage laufen dürfen. Ohne guten Grund leer lassen. Es gibt bewusst keine Option, alle schreibenden Tools auszunehmen, und das Verfassen einer Antwort lässt sich nie ausnehmen.",
+    "Named write tools that may run without asking the user. Leave empty unless you have a reason. There is deliberately no option to exempt all write tools, and writing or changing a draft reply can never be exempted.": "Namentlich benannte schreibende Tools, die ohne Rückfrage laufen dürfen. Ohne guten Grund leer lassen. Es gibt bewusst keine Option, alle schreibenden Tools auszunehmen, und das Verfassen oder Ändern eines Antwortentwurfs lässt sich nie ausnehmen.",
     "No write tools can be exempted from confirmation.": "Kein schreibendes Tool kann von der Bestätigung ausgenommen werden.",
     "Max tool steps": "Maximale Tool-Schritte",
     "How many times the assistant may call tools and think again within a single message.": "Wie oft der Assistent innerhalb einer Nachricht Tools aufrufen und erneut nachdenken darf.",
@@ -147,6 +147,9 @@
     "Conversation #:number was already :status": "Gespräch #:number war bereits :status",
     "Save a draft reply to :customer on conversation #:number. Nothing is sent — you review the draft and send it yourself.": "Einen Antwortentwurf an :customer im Gespräch #:number speichern. Es wird nichts gesendet – Sie prüfen den Entwurf und senden ihn selbst.",
     "Saved a draft reply on #:number (not sent)": "Antwortentwurf zu #:number gespeichert (nicht gesendet)",
+    "Replace the text of the draft reply to :customer on conversation #:number. Nothing is sent — you review the draft and send it yourself.": "Den Text des Antwortentwurfs an :customer im Gespräch #:number ersetzen. Es wird nichts gesendet – Sie prüfen den Entwurf und senden ihn selbst.",
+    "Replace the text of the draft note on conversation #:number. It stays a draft and is visible to agents only.": "Den Text des Notizentwurfs im Gespräch #:number ersetzen. Er bleibt ein Entwurf und ist nur für Mitarbeiter sichtbar.",
+    "Updated the draft on #:number (not sent)": "Entwurf zu #:number aktualisiert (nicht gesendet)",
     "the customer": "den Kunden",
     "Read conversation #:number": "Gespräch #:number gelesen",
     "Read the customer profile": "Kundenprofil gelesen",
@@ -190,5 +193,6 @@
     "Approve": "Bestätigen",
     "Reject": "Ablehnen",
     "{0} No other conversations|{1} 1 other conversation|[2,*] :count other conversations": "{0} Keine weiteren Gespräche|{1} 1 weiteres Gespräch|[2,*] :count weitere Gespräche",
+    "{0} No drafts on #:number|{1} Read 1 draft on #:number|[2,*] Read :count drafts on #:number": "{0} Keine Entwürfe zu #:number|{1} 1 Entwurf zu #:number gelesen|[2,*] :count Entwürfe zu #:number gelesen",
     "{1} the oldest message|[2,*] the :count oldest messages": "{1} die älteste Nachricht|[2,*] die :count ältesten Nachrichten"
 }

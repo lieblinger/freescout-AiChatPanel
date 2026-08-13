@@ -381,13 +381,18 @@ class ToolRegistry
      * Write tools that must always be confirmed, whatever the admin configures.
      *
      * Drafting a customer-facing message is the one action where an unattended
-     * mistake ends up in front of a customer, so it is not negotiable.
+     * mistake ends up in front of a customer, so it is not negotiable. Replacing
+     * the text of a draft is the same risk arriving from the other direction: it
+     * can overwrite what the agent wrote, so it is on the list too.
      *
      * @return array
      */
     public static function neverAutoRun()
     {
-        return ['conversation.create_draft_reply'];
+        return [
+            'conversation.create_draft_reply',
+            'conversation.update_draft',
+        ];
     }
 
     /**
@@ -443,9 +448,11 @@ class ToolRegistry
             new Builtin\ListCustomerConversationsTool(),
             new Builtin\GetConversationTool(),
             new Builtin\GetCustomerTool(),
+            new Builtin\GetDraftsTool(),
             new Builtin\AddNoteTool(),
             new Builtin\SetStatusTool(),
             new Builtin\CreateDraftReplyTool(),
+            new Builtin\UpdateDraftTool(),
         ];
     }
 

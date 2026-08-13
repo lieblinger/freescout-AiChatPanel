@@ -67,6 +67,7 @@ return [
         'tools_enabled'       => ['default' => [
             'conversation.list_customer_conversations',
             'conversation.get',
+            'conversation.get_drafts',
             'customer.get',
         ]],
         'write_tools_enabled' => ['default' => false],
