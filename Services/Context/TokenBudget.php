@@ -128,7 +128,7 @@ class TokenBudget
     /**
      * Record something that did not fit.
      *
-     * @param string $kind  'messages' | 'provider' | 'draft'
+     * @param string $kind  'messages' | 'chat' | 'chat_results' | 'provider' | 'draft'
      * @param string $label
      * @param int    $count
      *
@@ -182,6 +182,18 @@ class TokenBudget
                 $this->dropped['messages']['count'],
                 ['count' => $this->dropped['messages']['count']]
             );
+        }
+
+        if (!empty($this->dropped['chat']['count'])) {
+            $parts[] = trans_choice(
+                '{1} the oldest turn of this chat|[2,*] the :count oldest turns of this chat',
+                $this->dropped['chat']['count'],
+                ['count' => $this->dropped['chat']['count']]
+            );
+        }
+
+        if (!empty($this->dropped['chat_results']['count'])) {
+            $parts[] = __('the results of earlier tool calls');
         }
 
         if (!empty($this->dropped['draft']['count'])) {

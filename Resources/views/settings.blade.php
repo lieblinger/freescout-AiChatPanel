@@ -146,7 +146,7 @@
 
         <div class="col-sm-6">
             <input id="aichatpanel_max_context_tokens" type="number" min="500" class="form-control input-sized" name="settings[aichatpanel.max_context_tokens]" value="{{ old('settings[aichatpanel.max_context_tokens]', $settings['aichatpanel.max_context_tokens']) }}">
-            <p class="help-block">{{ __('Budget for the conversation history and extra context. When a thread exceeds it the oldest messages are dropped and the panel says so.') }}</p>
+            <p class="help-block">{{ __('Budget for the whole prompt: the conversation, the extra context, and the chat itself. The chat may use half of it before its oldest turns are dropped; the rest is kept for the conversation. The panel says so whenever anything is left out.') }}</p>
         </div>
     </div>
 

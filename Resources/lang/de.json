@@ -26,7 +26,7 @@
     "Whether each model can call tools. Filled in automatically by the connection test; correct it here if the probe got it wrong. Unlisted models are probed on first use.": "Ob das jeweilige Modell Tools aufrufen kann. Wird vom Verbindungstest automatisch gesetzt; hier korrigierbar, falls der Test danebenlag. Nicht gelistete Modelle werden bei der ersten Verwendung geprüft.",
     "Context": "Kontext",
     "Max context tokens": "Maximale Kontext-Tokens",
-    "Budget for the conversation history and extra context. When a thread exceeds it the oldest messages are dropped and the panel says so.": "Budget für den Gesprächsverlauf und zusätzlichen Kontext. Wird es überschritten, entfallen die ältesten Nachrichten und das Panel weist darauf hin.",
+    "Budget for the whole prompt: the conversation, the extra context, and the chat itself. The chat may use half of it before its oldest turns are dropped; the rest is kept for the conversation. The panel says so whenever anything is left out.": "Budget für den gesamten Prompt: das Gespräch, den zusätzlichen Kontext und den Chat selbst. Der Chat darf die Hälfte davon belegen, bevor seine ältesten Runden entfallen; der Rest bleibt dem Gespräch vorbehalten. Das Panel weist darauf hin, sobald etwas weggelassen wird.",
     "Include internal notes": "Interne Notizen einbeziehen",
     "Default for all mailboxes. Each mailbox can override it.": "Vorgabe für alle Postfächer. Jedes Postfach kann sie überschreiben.",
     "Send personal data": "Personenbezogene Daten senden",
@@ -134,6 +134,7 @@
     "That action is no longer the one waiting for confirmation. Reload the conversation.": "Diese Aktion wartet nicht mehr auf Bestätigung. Laden Sie das Gespräch neu.",
     "Context was shortened to fit the token budget: :parts left out.": "Der Kontext wurde gekürzt, um in das Token-Budget zu passen: :parts weggelassen.",
     "part of your reply draft": "ein Teil Ihres Antwortentwurfs",
+    "the results of earlier tool calls": "die Ergebnisse früherer Tool-Aufrufe",
     " and ": " und ",
     "The reply was cut off because it hit the response token limit. Raise \"Max response tokens\" in the settings for longer answers.": "Die Antwort wurde abgeschnitten, weil das Token-Limit erreicht wurde. Erhöhen Sie „Maximale Antwort-Tokens“ in den Einstellungen für längere Antworten.",
     "The assistant reached the limit of :count tool steps for one message. Ask it to continue if you need more.": "Der Assistent hat das Limit von :count Tool-Schritten für eine Nachricht erreicht. Bitten Sie ihn fortzufahren, wenn Sie mehr brauchen.",
@@ -197,5 +198,6 @@
     "Reject": "Ablehnen",
     "{0} No other conversations|{1} 1 other conversation|[2,*] :count other conversations": "{0} Keine weiteren Gespräche|{1} 1 weiteres Gespräch|[2,*] :count weitere Gespräche",
     "{0} No drafts on #:number|{1} Read 1 draft on #:number|[2,*] Read :count drafts on #:number": "{0} Keine Entwürfe zu #:number|{1} 1 Entwurf zu #:number gelesen|[2,*] :count Entwürfe zu #:number gelesen",
-    "{1} the oldest message|[2,*] the :count oldest messages": "{1} die älteste Nachricht|[2,*] die :count ältesten Nachrichten"
+    "{1} the oldest message|[2,*] the :count oldest messages": "{1} die älteste Nachricht|[2,*] die :count ältesten Nachrichten",
+    "{1} the oldest turn of this chat|[2,*] the :count oldest turns of this chat": "{1} die älteste Runde dieses Chats|[2,*] die :count ältesten Runden dieses Chats"
 }

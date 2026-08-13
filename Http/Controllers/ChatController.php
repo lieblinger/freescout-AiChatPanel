@@ -13,6 +13,8 @@ use Modules\AiChatPanel\Services\Agent\AgentLoop;
 use Modules\AiChatPanel\Services\Agent\AgentOutcome;
 use Modules\AiChatPanel\Services\ChangeCollector;
 use Modules\AiChatPanel\Services\Context\ContextBuilder;
+use Modules\AiChatPanel\Services\Context\HistoryWindow;
+use Modules\AiChatPanel\Services\Context\TokenBudget;
 use Modules\AiChatPanel\Services\Llm\CurlLlmClient;
 use Modules\AiChatPanel\Services\Llm\LlmException;
 use Modules\AiChatPanel\Services\Markdown\HtmlToMarkdown;
@@ -297,19 +299,11 @@ class ChatController extends Controller
         }
 
         $registry = new ToolRegistry($context);
-        $history = $chat->fresh()->toApiMessages();
 
-        $builder = new ContextBuilder($context);
-        $builder->setEditorDraft($draft, $mode);
-        $system = $builder->build($this->estimateHistoryTokens($history));
+        $assembled = $this->buildMessages($context, $chat, $registry, $draft, $mode);
 
-        $messages = array_merge(
-            [['role' => 'system', 'content' => $system['content']]],
-            $history
-        );
-
-        if ($system['truncated']) {
-            $this->sseEvent('notice', ['message' => $system['notice']]);
+        foreach ($assembled['notices'] as $notice) {
+            $this->sseEvent('notice', ['message' => $notice]);
         }
 
         $controller = $this;
@@ -321,7 +315,7 @@ class ChatController extends Controller
                 $controller->sseEvent($event, $payload);
             });
 
-        $outcome = $loop->run($messages);
+        $outcome = $loop->run($assembled['messages']);
 
         if ($outcome->status === AgentOutcome::STATUS_ERROR) {
             Message::create([
@@ -675,24 +669,15 @@ class ChatController extends Controller
 
         $registry = new ToolRegistry($context);
 
-        $history = $chat->fresh()->toApiMessages();
-
-        $builder = new ContextBuilder($context);
-        $builder->setEditorDraft($draft, $mode);
-        $system = $builder->build($this->estimateHistoryTokens($history));
-
-        $messages = array_merge(
-            [['role' => 'system', 'content' => $system['content']]],
-            $history
-        );
+        $assembled = $this->buildMessages($context, $chat, $registry, $draft, $mode);
 
         $loop = new AgentLoop($client, $registry, $context, $model);
         $loop->setChatId($chat->id);
 
-        $outcome = $loop->run($messages);
+        $outcome = $loop->run($assembled['messages']);
 
-        if ($system['truncated']) {
-            $outcome->notice($system['notice']);
+        foreach ($assembled['notices'] as $notice) {
+            $outcome->notice($notice);
         }
 
         if ($outcome->status === AgentOutcome::STATUS_ERROR) {
@@ -812,24 +797,76 @@ class ChatController extends Controller
     }
 
     /**
-     * Rough token cost of the chat so far, so the context builder can leave
-     * room for it.
+     * Assemble the messages for one turn: the system message, then as much of
+     * the chat as fits.
      *
-     * @param array $history
+     * The order matters. The chat is windowed FIRST, and it is the windowed
+     * cost — not the raw one — that the context builder reserves. That is what
+     * stops a long chat from crowding the conversation out of the system
+     * message: the reservation is now bounded by the history's own share of the
+     * budget, so there is always something left for the ticket.
      *
-     * @return int
+     * Whatever the window dropped comes back as a rollup line appended to the
+     * system message rather than as an extra chat message. It is context about
+     * the chat, not a turn in it, and putting it here avoids inventing a role
+     * for it that a strict endpoint might reject.
+     *
+     * @param PanelContext $context
+     * @param Chat         $chat
+     * @param ToolRegistry $registry
+     * @param string       $draft
+     * @param string       $mode
+     *
+     * @return array ['messages' => array, 'notices' => array]
      */
-    protected function estimateHistoryTokens(array $history)
+    protected function buildMessages(PanelContext $context, Chat $chat, ToolRegistry $registry, $draft, $mode)
     {
-        $text = '';
+        $window = HistoryWindow::forContext($context)->apply($chat->fresh()->toApiMessages());
 
-        foreach ($history as $message) {
-            if (!empty($message['content'])) {
-                $text .= $message['content'];
+        $builder = new ContextBuilder($context);
+        $builder->setEditorDraft($draft, $mode);
+
+        $system = $builder->build($window['tokens'] + $this->toolSchemaTokens($registry));
+
+        $content = $system['content'];
+
+        if ($window['rollup'] !== '') {
+            $content .= "\n\n".$window['rollup'];
+        }
+
+        $notices = [];
+
+        foreach ([$window, $system] as $part) {
+            if ($part['truncated']) {
+                $notices[] = $part['notice'];
             }
         }
 
-        return \Modules\AiChatPanel\Services\Context\TokenBudget::estimate($text);
+        return [
+            'messages' => array_merge([['role' => 'system', 'content' => $content]], $window['messages']),
+            'notices'  => $notices,
+        ];
+    }
+
+    /**
+     * What the tool schemas cost.
+     *
+     * They are sent on every completion in the run, so leaving them out of the
+     * budget understates the request by however many tools are switched on.
+     *
+     * @param ToolRegistry $registry
+     *
+     * @return int
+     */
+    protected function toolSchemaTokens(ToolRegistry $registry)
+    {
+        $definitions = $registry->toApiDefinitions();
+
+        if (!$definitions) {
+            return 0;
+        }
+
+        return TokenBudget::estimate(\Helper::jsonEncodeSafe($definitions));
     }
 
     /**

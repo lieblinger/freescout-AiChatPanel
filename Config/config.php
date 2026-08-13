@@ -31,6 +31,12 @@ return [
     // endpoint gives us nothing better. Deliberately pessimistic.
     'chars_per_token' => 3.5,
 
+    // Share of max_context_tokens the chat history may occupy before its oldest
+    // turns are dropped. The rest is guaranteed to the system message and the
+    // conversation itself, so a long chat can never crowd out the ticket it is
+    // about. Clamped to [0.1, 0.9] on read — see HistoryWindow::share().
+    'history_token_share' => 0.5,
+
     'options' => [
         // -- Connection ----------------------------------------------------
         'enabled'             => ['default' => false],
@@ -49,7 +55,7 @@ return [
         'max_response_tokens' => ['default' => 2048],
 
         // -- Context -------------------------------------------------------
-        'max_context_tokens'  => ['default' => 8000],
+        'max_context_tokens'  => ['default' => 16000],
         'system_prompt'       => ['default' => ''],
         'include_notes'       => ['default' => true],
         // Strip the mailbox signature from agent replies before they go into
