@@ -15,18 +15,46 @@
     // Helpers
     // =====================================================================
 
+    var lang_cache = null;
+
     /**
-     * Translate through FreeScout's Lang, falling back to the English source
-     * string when the module's vars.js has not been built yet.
+     * The strings Blade rendered into data-aicp-lang, parsed once.
+     *
+     * Both views that run this file carry the attribute — the panel and the
+     * admin settings form — so which one is on the page does not matter.
+     */
+    function langMap() {
+        if (lang_cache === null) {
+            lang_cache = {};
+
+            var raw = $('[data-aicp-lang]').first().attr('data-aicp-lang');
+
+            if (raw) {
+                try {
+                    lang_cache = JSON.parse(raw) || {};
+                } catch (e) {
+                    lang_cache = {};
+                }
+            }
+        }
+
+        return lang_cache;
+    }
+
+    /**
+     * Translate, falling back to the English source string in the call.
+     *
+     * The strings arrive as a data- attribute rendered by Blade, the same way
+     * the panel receives its URLs and preferences. They used to come from a
+     * generated vars.js read through core's Lang object, which no install path
+     * ever built — see Services/JsStrings.php.
      */
     function t(key, fallback, params) {
         var text = fallback;
+        var map = langMap();
 
-        if (typeof Lang !== 'undefined' && Lang.get) {
-            var translated = Lang.get('messages.' + key);
-            if (translated && translated !== 'messages.' + key) {
-                text = translated;
-            }
+        if (typeof map[key] === 'string' && map[key] !== '') {
+            text = map[key];
         }
 
         if (params) {

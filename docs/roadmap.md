@@ -134,9 +134,10 @@ the panel was open on *this* conversation specifically.
 
 ### 8. More languages
 
-English and German ship complete. The strings are extracted and the mechanism is
-FreeScout's own, so another locale is a single JSON file plus a
-`freescout:module-build`.
+English and German ship complete. The strings are extracted, so another locale
+is a single JSON file in `Resources/lang` and nothing else — the JavaScript
+strings come from `Services/JsStrings.php` through a data- attribute, so there
+is no asset to rebuild.
 
 ---
 

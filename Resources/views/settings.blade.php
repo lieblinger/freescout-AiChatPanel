@@ -5,7 +5,8 @@
     }
 @endphp
 
-<form class="form-horizontal margin-top margin-bottom" method="POST" action="">
+<form class="form-horizontal margin-top margin-bottom" method="POST" action=""
+      data-aicp-lang="{{ \Modules\AiChatPanel\Services\JsStrings::json() }}">
     {{ csrf_field() }}
 
     <h3 class="subheader">{{ __('Connection') }}</h3>
