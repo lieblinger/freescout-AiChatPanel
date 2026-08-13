@@ -181,7 +181,7 @@ class CurlLlmClient implements LlmClient
             $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         }
 
-        curl_close($ch);
+        $this->close($ch);
 
         if ($ok === false && $errno) {
             throw $this->transportException($errno, $error);
@@ -208,7 +208,7 @@ class CurlLlmClient implements LlmClient
      *
      * @throws LlmException
      */
-    protected function request($method, $path, array $payload = null)
+    protected function request($method, $path, ?array $payload = null)
     {
         $ch = $this->curl($method, $path, $payload);
 
@@ -217,7 +217,7 @@ class CurlLlmClient implements LlmClient
         $error = curl_error($ch);
         $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
-        curl_close($ch);
+        $this->close($ch);
 
         if ($body === false && $errno) {
             throw $this->transportException($errno, $error);
@@ -231,9 +231,9 @@ class CurlLlmClient implements LlmClient
      * @param string     $path
      * @param array|null $payload
      *
-     * @return resource
+     * @return resource|\CurlHandle
      */
-    protected function curl($method, $path, array $payload = null)
+    protected function curl($method, $path, ?array $payload = null)
     {
         $ch = curl_init($this->base_url.$path);
 
@@ -262,6 +262,26 @@ class CurlLlmClient implements LlmClient
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 
         return $ch;
+    }
+
+    /**
+     * Release a handle.
+     *
+     * curl_close() has been a no-op since PHP 8.0 — curl_init() returns a
+     * CurlHandle object that is freed by refcount — and PHP 8.5 deprecates it.
+     * Laravel's error handler turns that deprecation into an ErrorException,
+     * which is a \Exception, so on PHP 8.5 every single request through this
+     * client blew up. Core still supports PHP 7.1, where the call is real.
+     *
+     * @param resource|\CurlHandle $ch
+     *
+     * @return void
+     */
+    protected function close($ch)
+    {
+        if (PHP_VERSION_ID < 80000) {
+            curl_close($ch);
+        }
     }
 
     /**
