@@ -149,17 +149,6 @@ class WriteConfirmationTest extends AiChatPanelTestCase
     // -----------------------------------------------------------------------
 
     /**
-     * @param string $uri
-     * @param array  $data
-     *
-     * @return \Illuminate\Foundation\Testing\TestResponse
-     */
-    protected function csrfPost($uri, array $data = [])
-    {
-        return $this->json('POST', $uri, array_merge($data, ['_token' => csrf_token()]));
-    }
-
-    /**
      * Put a chat into the "waiting for confirmation" state the way the loop
      * would, so the confirm route can be exercised on its own.
      *

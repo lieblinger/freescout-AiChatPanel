@@ -145,6 +145,22 @@ abstract class AiChatPanelTestCase extends TestCase
     }
 
     /**
+     * A JSON POST carrying a valid CSRF token.
+     *
+     * Every panel route sits behind the `web` middleware group, so a request
+     * without a token is rejected before the controller sees it.
+     *
+     * @param string $uri
+     * @param array  $data
+     *
+     * @return \Illuminate\Foundation\Testing\TestResponse
+     */
+    protected function csrfPost($uri, array $data = [])
+    {
+        return $this->json('POST', $uri, array_merge($data, ['_token' => csrf_token()]));
+    }
+
+    /**
      * Add a published thread to the conversation.
      *
      * @param string $body
