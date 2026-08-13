@@ -938,14 +938,28 @@
         // version. The client renderer is only for streaming deltas.
         var body = message.html ? message.html : renderMarkdown(message.body || '');
 
-        // A reasoning model sometimes writes its whole answer into
-        // reasoning_content and returns empty content with finish_reason
-        // "stop" — most often for a short confirmation after a tool ran. The
-        // chain of thought is never promoted into the answer, but an empty
-        // bubble reads as a failure, so say what happened instead.
+        // An empty answer next to a non-empty chain of thought has two very
+        // different causes, and they need different advice, so branch on the
+        // finish reason rather than guessing:
+        //
+        //   "length" — max_tokens covers reasoning AND answer on a reasoning
+        //   model, so the budget ran out mid-thought and no answer was ever
+        //   written. The fix is a setting.
+        //
+        //   anything else — the model ended its turn after thinking. The
+        //   answer, such as it is, is in the reasoning.
+        //
+        // Either way the chain of thought is never promoted into the answer,
+        // but an empty bubble reads as a failure, so say what happened. The
+        // text has to stand on its own: the loop's truncation notice is
+        // transient and is gone when the chat is reloaded.
         if (!$.trim(message.body || '')) {
+            var finish = (message.meta || {}).finish_reason;
+
             body = '<em class="text-help">'
-                + escapeHtml(t('reasoning_only', 'The model put its whole answer into its reasoning and returned nothing. Open “Show reasoning” to read it, or ask again.'))
+                + escapeHtml(finish === 'length'
+                    ? t('answer_truncated', 'The model used its whole response budget before writing an answer. Raise “Max response tokens” in the settings, then ask again.')
+                    : t('reasoning_only', 'The model put its whole answer into its reasoning and returned nothing. Open “Show reasoning” to read it, or ask again.'))
                 + '</em>';
         }
 
