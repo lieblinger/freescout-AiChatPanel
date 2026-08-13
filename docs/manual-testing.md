@@ -86,7 +86,7 @@ Anything other than `200` is a networking problem, not a module problem.
    > `/v1/models` open but requires auth for completions.
 
 5. **Load from endpoint** next to *Allowed models*, then set **Default model**.
-6. Tick the tools you want. For the demo below, tick all six and switch on
+6. Tick the tools you want. For the demo below, tick all eight and switch on
    **Allow write tools**. Leave *Run without confirmation* empty.
 7. Save.
 
@@ -138,6 +138,33 @@ an empty list.
 14. Ask again and press **Approve**. The note appears in the conversation
     thread, attributed to **you**, not to a robot.
 
+### Drafting, then revising the draft
+
+The part worth checking carefully, because it is where the assistant edits work
+that already exists rather than adding to it.
+
+15. Ask: `Draft a reply to the latest customer message.` Approve the
+    `conversation.create_draft_reply` card, then **reload the conversation** —
+    the panel does not refresh the thread itself. A draft appears with **Edit**
+    and **Discard** buttons.
+16. Ask: `Make that draft two sentences shorter.` Expect two activity rows:
+    `conversation.get_drafts` running without confirmation, then a confirmation
+    card for `conversation.update_draft` saying it will *replace* the text.
+17. Approve and reload. **Same draft thread**, new text, nothing sent, and the
+    conversation is still in *Drafts* exactly once.
+18. In a single message, ask for two changes at once: `Make it shorter and more
+    formal.` Both must be present in the result — if the second edit resurrects
+    the pre-edit wording, the model is working from a stale copy rather than
+    re-reading with `conversation.get_drafts`.
+19. Type a draft **yourself** in the reply editor, save it, then ask the panel to
+    rewrite it. It should edit yours, and the thread should now read *"you edited
+    …'s draft"*.
+20. Ask it to change a reply that was already **sent**. It must refuse — there is
+    no tool for that — rather than editing anything.
+21. With a draft present, ask for a *new* draft. `create_draft_reply` refuses and
+    names the existing thread; the model should switch to `update_draft` by
+    itself.
+
 ### Audit log
 
 ```sql
@@ -150,19 +177,19 @@ were blocked (`status = 5`).
 
 ### Persistence
 
-15. Reload the page and reopen the panel. The whole exchange is restored,
+22. Reload the page and reopen the panel. The whole exchange is restored,
     including the tool activity rows.
-16. Press the **refresh icon** in the panel header for a new chat.
+23. Press the **refresh icon** in the panel header for a new chat.
 
 ### Per-mailbox settings
 
-17. *Mailbox settings » AI Chat Panel*. Set **Reply language** to `German` and
+24. *Mailbox settings » AI Chat Panel*. Set **Reply language** to `German` and
     an extra system prompt.
-18. Back in the conversation, ask for a draft reply — it comes back in German.
-19. Set **Available tools** to *Choose for this mailbox* and untick everything
+25. Back in the conversation, ask for a draft reply — it comes back in German.
+26. Set **Available tools** to *Choose for this mailbox* and untick everything
     but `conversation.get`. Ask the previous-conversations question again: the
     assistant no longer has that tool.
-20. Put it back to *Inherit*.
+27. Put it back to *Inherit*.
 
 ---
 

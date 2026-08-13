@@ -23,7 +23,8 @@ use Modules\AiChatPanel\Services\Tools\ToolResult;
  *     hard-codes it in neverAutoRun(), because a customer-facing message is the
  *     one place where an unattended mistake reaches a customer.
  *   - it refuses to create a second draft, so a model in a loop cannot bury the
- *     agent's own work under a pile of drafts.
+ *     agent's own work under a pile of drafts. Changing a draft that already
+ *     exists is conversation.update_draft's job, not a second create.
  */
 class CreateDraftReplyTool extends AbstractTool
 {
@@ -40,10 +41,11 @@ class CreateDraftReplyTool extends AbstractTool
      */
     public function description()
     {
-        return 'Save a draft reply to the customer on the current conversation. The draft is NOT '
-            .'sent: a human reviews it and sends it themselves. Use this only when the agent '
+        return 'Save a NEW draft reply to the customer on the current conversation. The draft is '
+            .'NOT sent: a human reviews it and sends it themselves. Use this only when the agent '
             .'explicitly asks you to prepare a reply in the conversation. If they just want to '
-            .'see suggested wording, write it in the chat instead.';
+            .'see suggested wording, write it in the chat instead. If the conversation already '
+            .'has a draft, do not call this — change that one with conversation.update_draft.';
     }
 
     /**
@@ -130,8 +132,10 @@ class CreateDraftReplyTool extends AbstractTool
 
         if ($existing) {
             throw new ToolException(
-                'This conversation already has a draft reply. Do not create another one; '
-                .'tell the user to open the existing draft, or to discard it first.'
+                'This conversation already has a draft (thread '.$existing->id.'). Do not create a '
+                .'second one. To change what it says, call conversation.update_draft with '
+                .'thread_id '.$existing->id.' and the full new text; read it first with '
+                .'conversation.get_drafts if you have not already.'
             );
         }
 

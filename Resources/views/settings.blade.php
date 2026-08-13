@@ -288,7 +288,7 @@
                 @endif
             </div>
             <p class="help-block">
-                {{ __('Named write tools that may run without asking the user. Leave empty unless you have a reason. There is deliberately no option to exempt all write tools, and drafting a reply can never be exempted.') }}
+                {{ __('Named write tools that may run without asking the user. Leave empty unless you have a reason. There is deliberately no option to exempt all write tools, and writing or changing a draft reply can never be exempted.') }}
             </p>
         </div>
     </div>

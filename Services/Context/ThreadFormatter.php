@@ -45,6 +45,29 @@ class ThreadFormatter
     }
 
     /**
+     * Plain text of a draft body, with nothing removed.
+     *
+     * Deliberately not body(): quote and signature stripping are right for
+     * history and wrong here. A draft is about to be rewritten verbatim, so
+     * hiding a pasted quote from the model would silently delete that quote from
+     * the agent's draft.
+     *
+     * @param Thread $thread
+     *
+     * @return string
+     */
+    public static function draftBody(Thread $thread)
+    {
+        $html = (string) $thread->body;
+
+        if (trim($html) === '') {
+            return '';
+        }
+
+        return self::collapse(\Helper::htmlToText($html, false, ['width' => 0]));
+    }
+
+    /**
      * Cut at the first quote marker.
      *
      * The marker list is core's own — \MailHelper::$alternative_reply_separators
@@ -242,12 +265,24 @@ class ThreadFormatter
     /**
      * Label for the kind of turn, so the model can tell a note from a reply.
      *
+     * Drafts get their own labels: the difference between text the customer has
+     * read and text nobody has sent yet is the most important thing the model
+     * can know about a thread.
+     *
      * @param Thread $thread
      *
      * @return string
      */
     public static function kind(Thread $thread)
     {
+        if ($thread->isDraft()) {
+            if ($thread->type == Thread::TYPE_NOTE) {
+                return 'draft_note';
+            }
+
+            return $thread->isForward() ? 'draft_forward' : 'draft_reply';
+        }
+
         switch ($thread->type) {
             case Thread::TYPE_CUSTOMER:
                 return 'customer_message';

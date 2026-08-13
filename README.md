@@ -37,14 +37,24 @@ Licence: **AGPL-3.0-or-later**.
 |---|---|---|
 | `conversation.list_customer_conversations` | read | other conversations of this customer |
 | `conversation.get` | read | one conversation by number, with its messages |
+| `conversation.get_drafts` | read | the unsent drafts on a conversation, with their thread ids |
 | `customer.get` | read | the full stored customer profile, including postal address, typed phone numbers and social profiles |
 | `conversation.add_note` | write | add an internal note |
 | `conversation.set_status` | write | change the conversation status |
-| `conversation.create_draft_reply` | write | save a draft reply (never sends) |
+| `conversation.create_draft_reply` | write | save a new draft reply (never sends) |
+| `conversation.update_draft` | write | replace the text of an existing draft (never sends) |
 
-The three read tools are on by default; the write tools start **disabled** and
+The four read tools are on by default; the write tools start **disabled** and
 are gated behind the "Allow write tools" master switch. Read tools run without
 asking; every write tool is confirmed in the panel first.
+
+**Drafts.** Drafts are deliberately absent from the conversation history the
+model is given, so `conversation.get_drafts` is the only way it sees one — which
+also means it re-reads the current text every time instead of working from a copy
+in the system message that would be stale the moment it edited anything.
+`conversation.update_draft` replaces the body of an existing draft, whether the
+assistant or a human wrote it. Only drafts: a reply that has been sent, or a note
+colleagues have already read, can never be changed through this module.
 
 ---
 
@@ -121,7 +131,7 @@ including tools from other modules. Plus:
 | Setting | Notes |
 |---|---|
 | Allow write tools | Master switch. Off = no data-changing tool is offered at all |
-| Run without confirmation | Named write tools exempt from the dialog. Empty by default. There is deliberately no "all writes" option, and `conversation.create_draft_reply` can never be listed |
+| Run without confirmation | Named write tools exempt from the dialog. Empty by default. There is deliberately no "all writes" option, and neither `conversation.create_draft_reply` nor `conversation.update_draft` can ever be listed |
 | Max tool steps | Tool-call/think cycles per message. Default 4 |
 | Max tool time | Wall-clock cap per message. Default 60s |
 
