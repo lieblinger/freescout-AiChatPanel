@@ -290,7 +290,10 @@ class EditorHtmlProfile
     {
         try {
             return $this->purifier()->purify((string) $html);
-        } catch (\Exception $e) {
+            // \Throwable for the same reason as MarkdownToHtml::convert():
+            // this is the last line before untrusted markup would be returned
+            // unsanitised, so it must not be possible to skip it.
+        } catch (\Throwable $e) {
             \Helper::logException($e, '[AiChatPanel] Sanitising model output failed: ');
 
             // Never return unsanitised HTML on the error path.

@@ -71,7 +71,11 @@ class MarkdownToHtml
             if ($profile->retargets()) {
                 $html = self::retarget($html, $profile);
             }
-        } catch (\Exception $e) {
+            // \Throwable, not \Exception: a pathological document can hit the
+            // DOM recursion limit, and that is an Error. This method promises
+            // never to throw and its callers — a tool storing a draft, the
+            // insert endpoint — rely on it.
+        } catch (\Throwable $e) {
             \Helper::logException($e, '[AiChatPanel] Markdown rendering failed: ');
 
             // Fall back to escaped plain text rather than showing nothing.
