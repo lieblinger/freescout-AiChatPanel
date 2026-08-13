@@ -70,24 +70,21 @@ class AiChatPanelServiceProvider extends ServiceProvider
     }
 
     /**
-     * Push the module's stylesheet and scripts into the layout.
+     * Get the module's stylesheet and scripts into the layout.
      *
-     * Both filters take an array of public paths. Public/ is symlinked to
+     * Only the scripts go through a filter now; the stylesheet is emitted
+     * directly, see registerStylesheet(). Public/ is symlinked to
      * core/public/modules/<alias> by `php artisan freescout:module-install`,
-     * so a missing symlink must not produce a 404 on every page.
+     * so every path here is checked with file_exists() first: a missing symlink
+     * must not produce a 404 on every page.
      *
      * @return void
      */
     protected function registerAssets()
     {
-        \Eventy::addFilter('stylesheets', function ($styles) {
-            $path = \Module::getPublicPath(AICHATPANEL_MODULE).'/css/module.css';
-            if (file_exists(public_path($path))) {
-                $styles[] = $path;
-            }
-
-            return $styles;
-        });
+        // module.css deliberately does NOT go through the `stylesheets` filter.
+        // See registerStylesheet() for why.
+        $this->registerStylesheet();
 
         \Eventy::addFilter('javascripts', function ($javascripts) {
             // Only our own files go in here. The vendored renderer and
@@ -109,6 +106,55 @@ class AiChatPanelServiceProvider extends ServiceProvider
             }
 
             return $javascripts;
+        });
+    }
+
+    /**
+     * module.css, as its own link tag outside the minified bundle.
+     *
+     * Core passes everything in the `stylesheets` filter to
+     * Minify::stylesheet(), and devfactory/minify 1.0.7 (core composer.json)
+     * predates CSS custom properties: it keeps a `--var: value` definition but
+     * silently deletes every declaration that *consumes* one with var().
+     *
+     * The panel is positioned entirely through those four declarations, so on
+     * any install that minifies, .aicp-panel came out as
+     *
+     *     .aicp-panel{position:fixed;right:0;z-index:999;display:none;...}
+     *
+     * with no top, bottom or width, and the layout rule next to it collapsed to
+     * an empty body.aicp-open #conv-layout,...{} — the declaration was its only
+     * content. The panel then opens at the foot of the document at full width,
+     * which reads as "the panel does not open" because it is nowhere near the
+     * viewport.
+     *
+     * A dev box hides it exactly the way it hid the marked bug:
+     * config/minify.config.php lists `local` under ignore_environments, so each
+     * file is served verbatim and the custom properties resolve.
+     *
+     * layout.head (core/resources/views/layouts/app.blade.php:21) renders above
+     * core's Minify::stylesheet() call (:33), so our rules land before
+     * style.css. That is safe here: everything in module.css is namespaced
+     * .aicp-* / .aichatpanel-*, and the only core-owned targets are
+     * body.aicp-open #conv-layout{,-header,-main} at specificity (0,1,1,1),
+     * which outranks core's own (0,1,0,0) and .print (0,1,1,0) rules for those
+     * ids no matter what order they are in.
+     *
+     * @return void
+     */
+    protected function registerStylesheet()
+    {
+        \Eventy::addAction('layout.head', function () {
+            $path = \Module::getPublicPath(AICHATPANEL_MODULE).'/css/module.css';
+            $full = public_path($path);
+
+            if (!file_exists($full)) {
+                return;
+            }
+
+            // asset() so the app still works installed in a subdirectory;
+            // mtime so a module update is not served from a stale cache.
+            echo '<link rel="stylesheet" href="'.e(asset($path).'?v='.filemtime($full)).'">'."\n";
         });
     }
 

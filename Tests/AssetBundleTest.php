@@ -120,6 +120,68 @@ class AssetBundleTest extends AiChatPanelTestCase
     }
 
     /**
+     * Nothing that relies on CSS custom properties may enter the bundle.
+     *
+     * devfactory/minify 1.0.7 keeps a `--var: value` definition but deletes
+     * every declaration that consumes one with var(). module.css positions the
+     * whole panel through four such declarations, so minification silently
+     * dropped all of them and the panel opened at the foot of the document.
+     *
+     * The rule is deliberately broader than "module.css must stay out": any
+     * stylesheet we add later is a candidate for the same silent mangling.
+     *
+     * @return void
+     */
+    public function testModuleAddsNoStylesheetToTheBundle()
+    {
+        $ours = $this->moduleStylesheets();
+
+        $this->assertSame(
+            [],
+            $ours,
+            'The module pushed '.implode(', ', $ours).' into the stylesheets filter. '
+                .'Core minifies that list with devfactory/minify, which deletes every var() '
+                .'declaration. Emit it as its own link tag in registerStylesheet() instead.'
+        );
+    }
+
+    /**
+     * module.css still has to reach the page, as its own link tag.
+     *
+     * @return void
+     */
+    public function testStylesheetIsEmittedOutsideTheBundle()
+    {
+        ob_start();
+        \Eventy::action('layout.head');
+        $html = ob_get_clean();
+
+        $this->assertMatchesRegularExpression(
+            '~<link[^>]+rel="stylesheet"[^>]+href="[^"]*/modules/aichatpanel/css/module\.css~',
+            $html,
+            'module.css is not emitted on layout.head, so the panel would have no styles at all.'
+        );
+    }
+
+    /**
+     * The var() declarations the minifier used to eat are the ones that position
+     * the panel. If they ever stop being custom properties this guard is moot,
+     * but while they are, the file must never be minified.
+     *
+     * @return void
+     */
+    public function testStylesheetStillDependsOnCustomProperties()
+    {
+        $css = file_get_contents(__DIR__.'/../Public/css/module.css');
+
+        $this->assertStringContainsString(
+            'var(--aicp-',
+            $css,
+            'module.css no longer uses custom properties — re-check whether it can go back in the bundle.'
+        );
+    }
+
+    /**
      * Fire the panel hook, then the layout hook, in the order the layout does.
      *
      * @return string
@@ -147,6 +209,24 @@ class AssetBundleTest extends AiChatPanelTestCase
 
         return array_values(array_filter(
             \Eventy::filter('javascripts', $core),
+            function ($path) use ($core) {
+                return !in_array($path, $core, true);
+            }
+        ));
+    }
+
+    /**
+     * The module's own contribution to the `stylesheets` filter, which should
+     * be nothing at all.
+     *
+     * @return array
+     */
+    protected function moduleStylesheets()
+    {
+        $core = ['/css/bootstrap.css', '/css/style.css'];
+
+        return array_values(array_filter(
+            \Eventy::filter('stylesheets', $core),
             function ($path) use ($core) {
                 return !in_array($path, $core, true);
             }
