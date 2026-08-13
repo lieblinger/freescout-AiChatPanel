@@ -133,6 +133,7 @@
     "There is nothing waiting for confirmation.": "Es wartet nichts auf eine Bestätigung.",
     "That action is no longer the one waiting for confirmation. Reload the conversation.": "Diese Aktion wartet nicht mehr auf Bestätigung. Laden Sie das Gespräch neu.",
     "Context was shortened to fit the token budget: :parts left out.": "Der Kontext wurde gekürzt, um in das Token-Budget zu passen: :parts weggelassen.",
+    "part of your reply draft": "ein Teil Ihres Antwortentwurfs",
     " and ": " und ",
     "The reply was cut off because it hit the response token limit. Raise \"Max response tokens\" in the settings for longer answers.": "Die Antwort wurde abgeschnitten, weil das Token-Limit erreicht wurde. Erhöhen Sie „Maximale Antwort-Tokens“ in den Einstellungen für längere Antworten.",
     "The assistant reached the limit of :count tool steps for one message. Ask it to continue if you need more.": "Der Assistent hat das Limit von :count Tool-Schritten für eine Nachricht erreicht. Bitten Sie ihn fortzufahren, wenn Sie mehr brauchen.",
