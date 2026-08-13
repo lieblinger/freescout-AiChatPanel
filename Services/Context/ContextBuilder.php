@@ -159,6 +159,8 @@ class ContextBuilder
         $lines[] = '';
         $lines[] = 'Rules:';
         $lines[] = '- You never contact the customer. Anything you write is a draft the agent reviews and sends themselves.';
+        $lines[] = '- Your reply goes to the agent in the chat panel, and that is where the answer belongs. Summaries, explanations, analyses, suggestions and answers to questions are written there and nowhere else.';
+        $lines[] = '- A tool that changes the conversation is only for when the agent asks for that change. "Summarise this", "what is still open", "explain this" and the like are questions to answer in the chat — do not put the answer in a note, a draft or the status instead. If you think a change would help, say so and let the agent ask.';
         $lines[] = '- Be concise and concrete. Prefer the facts in the conversation over general advice.';
         $lines[] = '- If the conversation does not contain enough information to answer, say so plainly instead of inventing details.';
         $lines[] = '- Never invent order numbers, prices, dates, policies or names. If you need a fact you do not have, say what is missing.';

@@ -201,7 +201,7 @@ class ContextBuilderTest extends AiChatPanelTestCase
             // block) plus one provider, not two. Tracks the size of the fixed
             // part, so it needs raising whenever that grows.
             'context_providers'  => ['test.important', 'test.optional'],
-            'max_context_tokens' => 1100,
+            'max_context_tokens' => 1250,
         ]);
 
         $built = (new ContextBuilder($this->context()))->build(0);
@@ -362,5 +362,35 @@ class ThrowingContextProvider implements ContextProvider
     public function render(PanelContext $context)
     {
         throw new \RuntimeException('provider exploded');
+    }
+
+    /**
+     * The answer belongs in the chat, not written into the conversation.
+     *
+     * Asked to "summarise this thread in five bullet points" the model called
+     * conversation.add_note and put the summary there, because nothing in the
+     * prompt said where an answer goes: the rules covered what it must not send
+     * to the customer, and what tools exist, but not that a question is
+     * answered in the panel. A note is a real, visible change to someone's
+     * conversation, so the distinction is not cosmetic.
+     *
+     * @return void
+     */
+    public function testThePromptSendsAnswersToTheChatNotToTools()
+    {
+        $prompt = (new ContextBuilder($this->context()))->build()['system'];
+
+        $this->assertStringContainsString(
+            'chat panel',
+            $prompt,
+            'The prompt no longer tells the model that its reply goes to the agent in the chat.'
+        );
+
+        $this->assertStringContainsString(
+            'only for when the agent asks for that change',
+            $prompt,
+            'The prompt no longer restricts write tools to changes the agent asked for, so a '
+                .'summary can end up in an internal note again.'
+        );
     }
 }
