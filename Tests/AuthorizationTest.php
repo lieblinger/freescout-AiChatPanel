@@ -30,22 +30,6 @@ class AuthorizationTest extends AiChatPanelTestCase
     }
 
     /**
-     * A JSON request carrying a valid CSRF token.
-     *
-     * Every POST route sits in the 'web' middleware group, so the token is
-     * required; testCsrfIsEnforced below proves that is not accidental.
-     *
-     * @param string $uri
-     * @param array  $data
-     *
-     * @return \Illuminate\Foundation\Testing\TestResponse
-     */
-    protected function csrfPost($uri, array $data = [])
-    {
-        return $this->json('POST', $uri, array_merge($data, ['_token' => csrf_token()]));
-    }
-
-    /**
      * Read the body of a StreamedResponse.
      *
      * getContent() is empty for a streamed response — the callback only runs on

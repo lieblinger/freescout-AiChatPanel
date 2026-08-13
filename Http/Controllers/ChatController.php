@@ -11,6 +11,7 @@ use Modules\AiChatPanel\Entities\ToolCall;
 use Modules\AiChatPanel\Entities\UserPref;
 use Modules\AiChatPanel\Services\Agent\AgentLoop;
 use Modules\AiChatPanel\Services\Agent\AgentOutcome;
+use Modules\AiChatPanel\Services\ChangeCollector;
 use Modules\AiChatPanel\Services\Context\ContextBuilder;
 use Modules\AiChatPanel\Services\Llm\CurlLlmClient;
 use Modules\AiChatPanel\Services\Llm\LlmException;
@@ -227,6 +228,11 @@ class ChatController extends Controller
             return $this->streamError(__('This chat request has expired. Send the message again.'));
         }
 
+        // stream() does not go through resolve(), so it arms the collector
+        // itself. Without this the tools that run inside the stream would
+        // change the conversation and tell nobody.
+        ChangeCollector::instance()->arm($conversation->id);
+
         return $this->sse(function () use ($context, $chat, $state) {
             $this->streamTurn(
                 $context,
@@ -345,6 +351,10 @@ class ChatController extends Controller
             'pending'  => $outcome->pending ? $outcome->pending->toPanelArray() : null,
             'usage'    => $outcome->usage,
             'duration' => round($outcome->duration, 2),
+            // Cumulative, not the delta: a client that missed a mid-turn frame
+            // converges here, and re-applying costs nothing because the browser
+            // skips threads already in the DOM (core main.js:3821).
+            'changes'  => ChangeCollector::instance()->snapshot(),
         ]);
     }
 
@@ -559,6 +569,11 @@ class ChatController extends Controller
                 'status'     => 'success',
                 'messages'   => $new_panel_messages,
                 'stream_url' => $this->openStream($context, $chat, $model, $draft, $mode),
+                // The approved write ran above, in *this* request. The
+                // follow-up turn is a separate request whose collector starts
+                // empty, so if the change set does not ride out here it never
+                // reaches the browser at all.
+                'changes'    => ChangeCollector::instance()->snapshot(),
             ]);
         }
 
@@ -696,6 +711,10 @@ class ChatController extends Controller
                 'msg'        => $outcome->error,
                 'error_type' => $outcome->error_type,
                 'messages'   => array_merge($prefix_messages, [$error_message->toPanelArray()]),
+                // Also on the error path: an approved write may have succeeded
+                // before the completion that followed it failed. The panel
+                // showing an error is no reason to hide the draft.
+                'changes'    => ChangeCollector::instance()->snapshot(),
             ]);
         }
 
@@ -710,6 +729,7 @@ class ChatController extends Controller
             'usage'    => $outcome->usage,
             'duration' => round($outcome->duration, 2),
             'pending'  => $outcome->pending ? $outcome->pending->toPanelArray() : null,
+            'changes'  => ChangeCollector::instance()->snapshot(),
         ]);
     }
 
@@ -1044,6 +1064,12 @@ class ChatController extends Controller
         if (!Settings::isUsable($context->mailbox)) {
             throw new \Exception('disabled');
         }
+
+        // From here on anything this request writes to the conversation is the
+        // assistant's doing, and the page behind the panel needs to hear about
+        // it. Outside an armed request the collector records nothing, which is
+        // what keeps ordinary autosave drafts from broadcasting.
+        ChangeCollector::instance()->arm($conversation->id);
 
         return $context;
     }

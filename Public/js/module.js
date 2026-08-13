@@ -245,7 +245,9 @@
         pending: null,
         streaming: true,
         buffer: '',
-        $streamBubble: null
+        $streamBubble: null,
+        // Thread ids the assistant edited, awaiting fresh HTML from the poll.
+        updatedThreads: {}
     };
 
     function initPanel() {
@@ -279,6 +281,8 @@
         updatePanelBounds();
 
         bindPanel();
+        bindConversationThreads();
+        bindRealtimeUpdates();
 
         if ($el.attr('data-open') === '1') {
             openPanel(false);
@@ -360,6 +364,11 @@
         panel.$el.on('click', '.aicp-confirm-reject', function (e) {
             e.preventDefault();
             resolveConfirmation(false);
+        });
+
+        panel.$el.on('click', '.aicp-open-draft', function (e) {
+            e.preventDefault();
+            openDraftInEditor($(this).attr('data-thread_id'));
         });
 
         panel.$el.on('click', '.aicp-reasoning-toggle', function (e) {
@@ -610,6 +619,10 @@
             return;
         }
 
+        // Before the error return below: a write that succeeded still changed
+        // the conversation, even when the completion after it failed.
+        applyConversationChanges(response.changes);
+
         // An error still carries the turns that were produced before it, so the
         // user can see what happened rather than a blank.
         if (response.messages) {
@@ -721,6 +734,12 @@
             showStreamStatus(t('thinking', 'Thinking…'));
         });
 
+        // The assistant changed the conversation itself. Refresh the page
+        // behind the panel now rather than making the user reload it.
+        source.addEventListener('conversation_changed', function (e) {
+            applyConversationChanges(parseEvent(e));
+        });
+
         source.addEventListener('notice', function (e) {
             var data = parseEvent(e);
 
@@ -765,6 +784,9 @@
             if (data.pending) {
                 showConfirmation(data.pending);
             }
+
+            // Cumulative, so a client that missed the mid-turn frame catches up.
+            applyConversationChanges(data.changes);
         });
 
         source.addEventListener('end', function () {
@@ -1044,7 +1066,41 @@
             + '<i class="glyphicon ' + icon + '"></i> '
             + '<span class="aicp-tool-name">' + escapeHtml(message.tool_name || '') + '</span> '
             + '<span class="aicp-tool-summary">' + escapeHtml(summary) + '</span>'
+            + renderDraftAction(message, ok)
             + '</div>';
+    }
+
+    /**
+     * The "Open in editor" link on a draft the assistant saved.
+     *
+     * Read out of the tool result rather than held in panel state, so it
+     * survives the authoritative re-render on the done frame and comes back
+     * when the chat is reopened days later.
+     *
+     * Never opens the editor on its own: showReplyForm() replaces its contents
+     * wholesale (core/public/js/main.js:1647) and the agent may be typing.
+     */
+    function renderDraftAction(message, ok) {
+        if (!ok || message.tool_name !== 'conversation.create_draft_reply') {
+            return '';
+        }
+
+        var threadId = null;
+
+        try {
+            var body = JSON.parse(message.body);
+            threadId = (body && body.data) ? body.data.thread_id : null;
+        } catch (err) {
+            return '';
+        }
+
+        if (!threadId) {
+            return '';
+        }
+
+        return ' <a href="#" class="aicp-open-draft" data-thread_id="' + escapeHtml(String(threadId)) + '">'
+            + escapeHtml(t('open_draft', 'Open in editor'))
+            + '</a>';
     }
 
     function renderToolHint(tools) {
@@ -1206,7 +1262,24 @@
                 stream: panel.streaming ? 1 : 0
             }
         }).done(function (response) {
+            // Before the stream_url return: the approved write ran in this
+            // request, and the follow-up streaming request cannot report it.
+            if (response) {
+                applyConversationChanges(response.changes);
+            }
+
             if (response && response.stream_url) {
+                // Same reasoning for the messages: the tool turn this confirm
+                // produced exists only on this response, because the follow-up
+                // stream reports the turns that come after it. Without this the
+                // approved tool row — and the "Open in editor" link on a draft —
+                // stays missing until the chat is reopened.
+                if (response.messages) {
+                    renderMessages($.grep(response.messages, function (m) {
+                        return m.role !== 'user';
+                    }), false);
+                }
+
                 openStream(response.stream_url);
                 return;
             }
@@ -1219,6 +1292,233 @@
                 showPanelError(httpError(xhr));
             }
         });
+    }
+
+    // ---------------------------------------------------------------------
+    // Live conversation refresh
+    // ---------------------------------------------------------------------
+
+    /**
+     * React to what the assistant just changed in the conversation.
+     *
+     * FreeScout has one mechanism for updating an open conversation view:
+     * polycast plus App\Events\RealtimeConvNewThread. The server has already
+     * written the event row, and core's own handler
+     * (core/public/js/main.js:3811) will render the thread, authorise the
+     * recipient, insert the HTML and refresh the status and assignee widgets.
+     *
+     * All this has to do is stop the browser waiting up to five seconds for the
+     * next poll. The change set carries ids only; it is a poke, not the data.
+     */
+    function applyConversationChanges(changes) {
+        if (!changes || !changes.conversation_id) {
+            return;
+        }
+
+        // module.js loads on every page, so never assume the conversation
+        // layout is present.
+        if (!$('#conv-layout-main').length) {
+            return;
+        }
+
+        var openId = (typeof getGlobalAttr === 'function')
+            ? getGlobalAttr('conversation_id')
+            : panel.conversationId;
+
+        if (String(changes.conversation_id) !== String(openId)) {
+            return;
+        }
+
+        // Core inserts a thread only when it is not already in the DOM
+        // (main.js:3821) and has no path at all for one that changed. Remember
+        // which ids were edited so the handler below can replace them when the
+        // poll delivers the freshly rendered HTML.
+        $.each(changes.updated_thread_ids || [], function (i, id) {
+            panel.updatedThreads[id] = true;
+        });
+
+        pokeRealtime(changes.since);
+    }
+
+    /**
+     * Replace threads the assistant edited, when the poll brings them back.
+     *
+     * This rides the same event and the same channel as core's own handler.
+     * poly.subscribe() creates a fresh channel object per call and
+     * parseResponse() fires all of them (polycast.js:292), so both run: core's
+     * inserts what is new, this replaces what changed. Registered after core's
+     * because module.js is appended to the bundle behind main.js, so by the
+     * time this runs core has already decided to skip the thread.
+     */
+    function bindRealtimeUpdates() {
+        if (typeof poly === 'undefined' || !poly) {
+            return;
+        }
+
+        var conversationId = (typeof getGlobalAttr === 'function')
+            ? getGlobalAttr('conversation_id')
+            : panel.conversationId;
+
+        if (!conversationId) {
+            return;
+        }
+
+        poly.subscribe('conv.' + conversationId)
+            .on('App\\Events\\RealtimeConvNewThread', function (data) {
+                if (!data || !data.thread_id || !data.thread_html) {
+                    return;
+                }
+
+                if (!panel.updatedThreads[data.thread_id]) {
+                    return;
+                }
+
+                var $old = $('#thread-' + data.thread_id);
+
+                if (!$old.length) {
+                    // Core inserted it after all — nothing to replace.
+                    return;
+                }
+
+                delete panel.updatedThreads[data.thread_id];
+
+                // A draft open in the reply editor is deliberately hidden by
+                // core's editDraft(). The replacement must not pop it back into
+                // view underneath the form the agent is working in.
+                var wasHidden = !$old.is(':visible');
+                var $new = $(data.thread_html);
+
+                $old.replaceWith($new);
+
+                if (wasHidden) {
+                    $new.hide();
+                } else if (typeof flashElement === 'function') {
+                    flashElement($new);
+                }
+            });
+    }
+
+    /**
+     * Make the next polycast poll happen now instead of on its timer.
+     *
+     * Two things are needed to actually see the change straight away.
+     *
+     * clearTimeout first: parseResponse() re-arms the timer unconditionally
+     * (core/public/js/polycast/polycast.js:306) and setTimeout() overwrites
+     * this.timeout without clearing the old one (:182), so an unguarded
+     * fetch() leaves a second timer chain running for the life of the page and
+     * doubles the poll rate every time it is called.
+     *
+     * Then the time cursor. polycast defers each handler by the event's age
+     * relative to the cursor the poll was made with (:361), and the cursor is
+     * whenever the *last* poll ran — so polling immediately would still leave
+     * the change hidden for up to the full five-second interval. Winding the
+     * cursor back to just before the write makes that age ~0. The server sends
+     * it; guessing it here would race the two clocks.
+     *
+     * parseResponse() resets the cursor from the response (:283), so this is a
+     * one-poll effect. Redelivered events are harmless: core skips threads
+     * already in the DOM (main.js:3821).
+     */
+    function pokeRealtime(since) {
+        if (typeof poly === 'undefined' || !poly || !poly.connected) {
+            return;
+        }
+
+        try {
+            if (since) {
+                poly.setTime(since);
+            }
+
+            clearTimeout(poly.timeout);
+            poly.fetch();
+        } catch (err) {
+            // A missed poke costs the user five seconds, not the change.
+        }
+    }
+
+    /**
+     * Bind the controls on threads that arrive after page load.
+     *
+     * Core binds .edit-draft-trigger and .discard-draft-trigger directly inside
+     * initConversation() (core/public/js/main.js:1201,1207), which ran once at
+     * page load, so realtime-inserted drafts get dead buttons. Delegating is
+     * also the only thing that survives core's "View new message" trigger,
+     * which does $('#conv-layout-main').prepend(container.html()) (:3830) and
+     * therefore re-parses the markup into brand new nodes.
+     *
+     * The marker class is what keeps this from double-firing: threads that were
+     * on the page at load already carry core's direct handler.
+     */
+    function bindConversationThreads() {
+        var $main = $('#conv-layout-main');
+
+        if (!$main.length) {
+            return;
+        }
+
+        $main.find('.thread').addClass('aicp-core-bound');
+
+        $main.on('click', '.thread:not(.aicp-core-bound) .edit-draft-trigger', function (e) {
+            e.preventDefault();
+
+            if (typeof editDraft === 'function') {
+                editDraft($(this));
+            }
+        });
+
+        $main.on('click', '.thread:not(.aicp-core-bound) .discard-draft-trigger', function (e) {
+            e.preventDefault();
+
+            if (typeof discardDraft === 'function') {
+                discardDraft($(this).parents('.thread:first').attr('data-thread_id'));
+            }
+        });
+
+        // Tooltips on injected threads, and again after core splices the
+        // "View new message" container: the timeout lets core's own handler
+        // finish re-parsing first.
+        $main.on('click', '.view-new-trigger', function () {
+            setTimeout(function () {
+                if (typeof initTooltip === 'function') {
+                    initTooltip($main.find('.thread:not(.aicp-core-bound) [data-toggle="tooltip"]'));
+                }
+            }, 0);
+        });
+    }
+
+    /**
+     * Load a draft into the reply editor, the way core's editDraft() does
+     * (core/public/js/main.js:4601). Goes straight to the ajax action rather
+     * than clicking the thread's Edit button, so it works whether or not the
+     * polycast poll has landed yet.
+     */
+    function openDraftInEditor(threadId) {
+        if (!threadId || typeof fsAjax !== 'function' || typeof showReplyForm !== 'function') {
+            showFloatingAlert('error', t('no_editor', 'The reply editor is not available on this page.'));
+            return;
+        }
+
+        fsAjax(
+            {action: 'load_draft', thread_id: threadId},
+            laroute.route('conversations.ajax'),
+            function (response) {
+                loaderHide();
+
+                if (response && response.status === 'success') {
+                    showReplyForm(response.data, -50);
+
+                    if (response.data.is_forward == '1' && typeof showForwardForm === 'function') {
+                        showForwardForm(response.data);
+                    }
+
+                    // Core hides the draft block while it is being edited.
+                    $('#thread-' + threadId).hide();
+                } else {
+                    showAjaxError(response);
+                }
+            }
+        );
     }
 
     // ---------------------------------------------------------------------
