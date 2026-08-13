@@ -182,6 +182,30 @@ class EditorHtmlProfile
     }
 
     /**
+     * Whether a block of this tag already puts space under itself.
+     *
+     * Everything in $editor_styles carries its own margin-bottom except the
+     * paragraph -- which is a bare <div>, because core patches Summernote's
+     * formatPara to DIV -- and the blockquote, which core styles at margin:0.
+     * Those two are the ones that need Summernote's empty paragraph after them
+     * to read as a paragraph break instead of a line break.
+     *
+     * @param string $tag
+     *
+     * @return bool
+     */
+    public function providesBlockSpacing($tag)
+    {
+        $tag = strtolower($tag);
+
+        // Read off $editor_styles above: h1-h6, ul, ol, pre and table all end
+        // in a 10px or 20px margin-bottom, and hr is margin:20px 0. Only these
+        // two are flush, so only these two need a spacer after them. An unknown
+        // tag is assumed to space itself, which errs towards the old output.
+        return $tag !== $this->blockTag() && $tag !== 'blockquote';
+    }
+
+    /**
      * The block element a paragraph becomes.
      *
      * Summernote's emptyPara and formatPara are patched to DIV in core

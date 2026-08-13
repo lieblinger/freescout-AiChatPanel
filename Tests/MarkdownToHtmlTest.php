@@ -3,6 +3,7 @@
 namespace Modules\AiChatPanel\Tests;
 
 use Modules\AiChatPanel\Services\Markdown\EditorHtmlProfile;
+use Modules\AiChatPanel\Services\Markdown\HtmlToMarkdown;
 use Modules\AiChatPanel\Services\Markdown\MarkdownToHtml;
 
 /**
@@ -58,6 +59,67 @@ class MarkdownToHtmlTest extends AiChatPanelTestCase
         // Summernote's own block element is <div>; core allows <p> but the
         // editor never produces one.
         $this->assertStringNotContainsString('<p>', $html);
+    }
+
+    /**
+     * A paragraph break has to read as a paragraph break in the editor.
+     *
+     * <div> carries no margin, so two of them in a row are consecutive lines
+     * and nothing separates them: a draft's salutation, body and sign-off used
+     * to arrive stacked. Summernote writes <div><br></div> for the blank line
+     * a person makes by pressing Enter twice, and that is what goes between.
+     *
+     * @return void
+     */
+    public function testParagraphBreaksSurviveAsBlankLines()
+    {
+        $html = MarkdownToHtml::toEditorHtml("First.\n\nSecond.\n\nThird.");
+
+        $this->assertSame(
+            2,
+            substr_count($html, '<div><br></div>'),
+            'A blank line between paragraphs no longer produces the empty paragraph the editor '
+                .'renders as a blank line, so the paragraphs run together.'
+        );
+
+        $this->assertStringContainsString('<div>First.</div><div><br></div><div>Second.</div>', $html);
+    }
+
+    /**
+     * A block that already carries a bottom margin must not get a spacer too.
+     *
+     * @return void
+     */
+    public function testBlocksWithTheirOwnSpacingGetNoSpacer()
+    {
+        $html = MarkdownToHtml::toEditorHtml("Intro.\n\n- one\n- two\n\nOutro.");
+
+        // Before the list: the paragraph is flush, so it needs one.
+        $this->assertStringContainsString('<div>Intro.</div><div><br></div><ul', $html);
+
+        // After it: <ul> is styled margin:0 0 10px 0, so a spacer would double
+        // the gap.
+        $this->assertStringContainsString('</ul><div>Outro.</div>', $html);
+    }
+
+    /**
+     * The spacer must not leak into the markdown on the way back.
+     *
+     * HtmlToMarkdown drops <div><br></div> as the editor's empty paragraph, so
+     * a draft the user edits and the panel re-reads is unchanged by the trip.
+     *
+     * @return void
+     */
+    public function testTheSpacerRoundTripsAway()
+    {
+        $markdown = "Sehr geehrte Frau Meier,\n\nvielen Dank.\nBis bald.\n\nMit freundlichen Grüßen";
+
+        $this->assertSame(
+            $markdown,
+            HtmlToMarkdown::convert(MarkdownToHtml::toEditorHtml($markdown)),
+            'The empty paragraphs inserted for spacing come back as content, so every round '
+                .'trip through the editor grows the draft.'
+        );
     }
 
     public function testSingleNewlinesBecomeLineBreaks()

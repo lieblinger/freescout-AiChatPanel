@@ -113,7 +113,57 @@ class MarkdownToHtml
             }
         }
 
+        self::spaceBlocks($body, $profile);
+
         return Dom::serialise($body);
+    }
+
+    /**
+     * Put Summernote's empty paragraph between blocks that sit flush.
+     *
+     * A markdown paragraph break has to survive as a paragraph break. The
+     * editor's block element is a bare <div> — core patches Summernote's
+     * formatPara to DIV — and a <div> carries no margin, so two in a row
+     * render as consecutive lines: every blank line in the model's answer
+     * collapsed into a single newline, which put the salutation, the body and
+     * the sign-off of a draft all on adjacent lines. What a person gets by
+     * pressing Enter twice in Summernote is <div><br></div>, so that is what
+     * goes in.
+     *
+     * This stays symmetric with HtmlToMarkdown, which drops <div><br></div> as
+     * the editor's empty paragraph and joins the remaining blocks with a blank
+     * line, so markdown -> HTML -> markdown still returns the original text.
+     *
+     * Blocks carrying their own margin-bottom are left alone, or a list would
+     * end up with both its 10px and a spacer underneath.
+     *
+     * @param \DOMNode          $body
+     * @param EditorHtmlProfile $profile
+     *
+     * @return void
+     */
+    protected static function spaceBlocks(\DOMNode $body, EditorHtmlProfile $profile)
+    {
+        $blocks = [];
+
+        foreach (iterator_to_array($body->childNodes) as $child) {
+            if ($child instanceof \DOMElement) {
+                $blocks[] = $child;
+            }
+        }
+
+        // Walk backwards: inserting shifts everything after the insertion
+        // point, and the last block never needs a spacer after it anyway.
+        for ($i = count($blocks) - 2; $i >= 0; $i--) {
+            if ($profile->providesBlockSpacing($blocks[$i]->nodeName)) {
+                continue;
+            }
+
+            $spacer = $body->ownerDocument->createElement($profile->blockTag());
+            $spacer->appendChild($body->ownerDocument->createElement('br'));
+
+            $body->insertBefore($spacer, $blocks[$i + 1]);
+        }
     }
 
     /**
