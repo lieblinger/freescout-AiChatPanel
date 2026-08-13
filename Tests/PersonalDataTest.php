@@ -70,7 +70,9 @@ class PersonalDataTest extends AiChatPanelTestCase
 
         $content = (new ContextBuilder($this->context()))->build(0)['content'];
 
-        $this->assertStringContainsString('You are helping this agent:', $content);
+        $this->assertStringContainsString('You are helping this agent', $content);
+        // "my number" must resolve to the agent, not to the customer.
+        $this->assertStringContainsString('never the customer', $content);
         $this->assertStringContainsString($this->agent->getFullName(), $content);
         $this->assertStringContainsString('agent@example.invalid', $content);
         $this->assertStringContainsString('+49 30 1234567', $content);
@@ -89,7 +91,7 @@ class PersonalDataTest extends AiChatPanelTestCase
         // number, which is worse than the row being absent.
         $this->assertStringNotContainsString('Phone:', $content);
         $this->assertStringNotContainsString('Job title:', $content);
-        $this->assertStringContainsString('You are helping this agent:', $content);
+        $this->assertStringContainsString('You are helping this agent', $content);
     }
 
     public function testTheAgentBlockSurvivesAConversationLongEnoughToTruncate()

@@ -325,7 +325,20 @@ class ContextBuilder
             }
         }
 
-        return "You are helping this agent:\n".implode("\n", $rows);
+        // Bind the first person explicitly. Without this the model reads "add
+        // my number to the draft" as being about the customer and reaches for
+        // customer.get, which returns the wrong person's details — or none, and
+        // it then says it cannot find them.
+        $header = 'You are helping this agent. When the person you are chatting with says "I", "me" or "my", '
+            .'they mean this person, never the customer.';
+
+        if (count($rows) > 1) {
+            $header .= ' Their own details are below; do not call customer.get to look them up, that tool returns the customer.';
+        } else {
+            $header .= ' Beyond their name you have no details for them: say so rather than offering the customer\'s.';
+        }
+
+        return $header."\n".implode("\n", $rows);
     }
 
     /**
