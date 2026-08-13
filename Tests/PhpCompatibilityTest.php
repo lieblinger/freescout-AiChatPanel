@@ -74,14 +74,42 @@ class PhpCompatibilityTest extends AiChatPanelTestCase
         }
     }
 
+    /**
+     * ReflectionProperty/ReflectionMethod::setAccessible() is deprecated in 8.5.
+     *
+     * PHP 8.1 made reflection ignore visibility, so the call has been a no-op
+     * ever since and 8.5 deprecates it. Unlike curl_close() this one is not
+     * worth a version guard: nothing in the module supports being run through
+     * reflection on PHP < 8.1 in a way that needs it, and the tests only ever
+     * run on our own PHP.
+     *
+     * Tests are scanned too here -- the call that broke the suite on 8.5 was in
+     * one, and a test that cannot run is as broken as shipped code that cannot.
+     *
+     * @return void
+     */
+    public function testNoReflectionSetAccessible()
+    {
+        foreach ($this->sources(true) as $path => $code) {
+            foreach ($this->linesMatching($code, '/->\s*setAccessible\s*\(/') as $number => $line) {
+                $this->fail(
+                    $path.':'.$number.' calls setAccessible(): '.trim($line)."\n"
+                        .'It has been a no-op since PHP 8.1 and is deprecated in 8.5. Drop the call.'
+                );
+            }
+        }
+    }
+
     // -----------------------------------------------------------------------
 
     /**
-     * Every PHP file the module ships, excluding its own tests.
+     * Every PHP file the module ships.
+     *
+     * @param bool $include_tests Also return the module's own test files.
      *
      * @return array path => source
      */
-    protected function sources()
+    protected function sources($include_tests = false)
     {
         $root = realpath(__DIR__.'/..');
 
@@ -98,7 +126,11 @@ class PhpCompatibilityTest extends AiChatPanelTestCase
 
             $relative = ltrim(str_replace($root, '', $file->getPathname()), '/');
 
-            if (strpos($relative, 'Tests/') === 0 || strpos($relative, 'vendor/') === 0) {
+            if (strpos($relative, 'vendor/') === 0) {
+                continue;
+            }
+
+            if (!$include_tests && strpos($relative, 'Tests/') === 0) {
                 continue;
             }
 

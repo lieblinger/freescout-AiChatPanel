@@ -96,8 +96,12 @@ class AuthorizationTest extends AiChatPanelTestCase
         // And the group really does carry the CSRF middleware in this install.
         // Laravel 5.5's Kernel has no public accessor for the groups, so read
         // the property directly.
+        //
+        // No setAccessible() call: it has done nothing since PHP 8.1, which made
+        // reflection ignore visibility, and 8.5 deprecates it. Our own
+        // deprecations are still promoted to exceptions under test, so calling it
+        // fails this test outright on a production-matching PHP.
         $groups = new \ReflectionProperty(\App\Http\Kernel::class, 'middlewareGroups');
-        $groups->setAccessible(true);
         $web = $groups->getValue(app(\Illuminate\Contracts\Http\Kernel::class))['web'];
 
         $this->assertContains(\App\Http\Middleware\VerifyCsrfToken::class, $web);

@@ -80,12 +80,21 @@ body.aicp-open .aicp-panel {
     display: flex;
 }
 
-/* Shift the conversation layout instead of overlapping it. margin-right, not
-   padding-right: #conv-layout-customer is absolutely positioned with right:0,
-   which resolves against the padding box and would ignore padding. */
-body.aicp-open #conv-layout,
-body.aicp-open #conv-layout-header,
-body.aicp-open #conv-layout-main {
+/* Shift the conversation layout instead of overlapping it.
+
+   The margin goes on .content-2col, NOT on #conv-layout and friends. Core gives
+   all three of those an explicit `width: 100%` (style.css: #conv-layout,
+   #conv-layout-header, #conv-layout-main), and a margin cannot shrink a box
+   whose width is already stated -- it just makes it overflow by that much. The
+   columns kept their full width and the panel sat on top of the customer
+   sidebar.
+
+   .content-2col is a flex item (`flex: 1`), so its margin genuinely reduces the
+   width the flex algorithm hands it. Everything inside then follows on its own:
+   #conv-layout is 100% of the narrower parent, and #conv-layout-customer is
+   absolutely positioned with right:0 against #conv-layout, so the customer
+   sidebar tracks the new edge instead of disappearing under the panel. */
+body.aicp-open .content-2col {
     margin-right: var(--aicp-width);
 }
 
@@ -543,9 +552,7 @@ body.aicp-resizing {
     }
 
     /* Do not shift the layout: there is no room for it. */
-    body.aicp-open #conv-layout,
-    body.aicp-open #conv-layout-header,
-    body.aicp-open #conv-layout-main {
+    body.aicp-open .content-2col {
         margin-right: 0;
     }
 
