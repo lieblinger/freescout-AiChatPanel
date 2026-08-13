@@ -2,6 +2,7 @@
 
 namespace Modules\AiChatPanel\Services\Tools;
 
+use Modules\AiChatPanel\Services\Markdown\MarkdownToHtml;
 use Modules\AiChatPanel\Services\PanelContext;
 
 /**
@@ -74,6 +75,33 @@ abstract class AbstractTool implements Tool
                 'parameters'  => $this->parameters(),
             ],
         ];
+    }
+
+    /**
+     * A model-written body, as the HTML a thread stores.
+     *
+     * The model answers in Markdown, so a thread body written by a tool has to
+     * be converted the same way an inserted answer is — otherwise "**bold**"
+     * reaches the customer's mailbox as four asterisks and a word.
+     *
+     * The conversion is also the sanitising step: MarkdownToHtml ends in
+     * HTMLPurifier with a profile narrower than core's.
+     *
+     * @param string $markdown
+     *
+     * @return string
+     */
+    protected static function renderBody($markdown)
+    {
+        $html = MarkdownToHtml::toEditorHtml($markdown);
+
+        if (trim(strip_tags($html)) !== '') {
+            return $html;
+        }
+
+        // A body that was nothing but markup would otherwise be stored empty,
+        // and an empty thread is worse than an escaped one.
+        return '<div>'.nl2br(htmlspecialchars((string) $markdown, ENT_QUOTES, 'UTF-8')).'</div>';
     }
 
     /**

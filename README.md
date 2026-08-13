@@ -22,8 +22,18 @@ Licence: **AGPL-3.0-or-later**.
 - Multi-turn chat about the open conversation, with the full thread history,
   conversation metadata, customer details and attachment filenames as context.
 - Streaming responses, rendered as Markdown and sanitised.
+- **Markdown both ways.** Thread bodies reach the model as Markdown, so a list
+  stays a list and a link keeps its target; everything the model writes back —
+  an inserted answer, a draft reply, a note — becomes real formatting in the
+  reply editor and in the customer's mail client. Tables, headings, quotes and
+  code blocks are styled to match what FreeScout's own editor produces, so an
+  assistant-written table and a hand-made one are indistinguishable, and the
+  editor's table controls work on both.
 - **Insert as reply** or **insert as internal note** — appended below whatever
   is already in the editor, never replacing it, never sending.
+- Whatever is currently open in the reply editor is sent along with each
+  question, so "make what I wrote more formal" works on text that has never
+  been saved.
 - **Tools**: the assistant can look things up and, with confirmation, change
   things. Other modules can add their own without this module knowing they
   exist — see [docs/extending.md](docs/extending.md).
@@ -67,6 +77,9 @@ colleagues have already read, can never be changed through this module.
 No Node build step, no bundler, no CDN. The two vendored frontend libraries
 (`marked`, `DOMPurify`) ship as files under `Public/js/vendor/` with their
 licences.
+
+No PHP dependencies of its own either: the Markdown conversion uses Parsedown
+and HTMLPurifier, both of which already ship with FreeScout.
 
 ---
 

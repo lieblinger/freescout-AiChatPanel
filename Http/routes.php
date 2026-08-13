@@ -82,6 +82,13 @@ Route::group([
     Route::get('/aichatpanel/chat/stream/{token}', 'ChatController@stream')
         ->name('aichatpanel.chat.stream');
 
+    // Converts one stored answer's Markdown into the HTML the reply editor
+    // wants. Server-side because the panel's own bubble HTML is rendered for a
+    // browser, not for a thread body: it allows <code>, <hr> and <del>, which
+    // core's purifier drops the moment the draft is displayed or sent.
+    Route::post('/aichatpanel/chat/editor-html', 'ChatController@editorHtml')
+        ->name('aichatpanel.chat.editor_html');
+
     Route::post('/aichatpanel/chat/reset', 'ChatController@reset')
         ->name('aichatpanel.chat.reset');
 

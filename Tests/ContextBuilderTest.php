@@ -201,7 +201,7 @@ class ContextBuilderTest extends AiChatPanelTestCase
             // block) plus one provider, not two. Tracks the size of the fixed
             // part, so it needs raising whenever that grows.
             'context_providers'  => ['test.important', 'test.optional'],
-            'max_context_tokens' => 900,
+            'max_context_tokens' => 1100,
         ]);
 
         $built = (new ContextBuilder($this->context()))->build(0);
@@ -239,6 +239,44 @@ class ContextBuilderTest extends AiChatPanelTestCase
 
         $this->assertStringContainsString('Thanks, that fixed it.', $text);
         $this->assertStringNotContainsString('must not be repeated', $text);
+    }
+
+    public function testThreadBodiesReachTheModelAsMarkdown()
+    {
+        // Structure is what the model can use. Html2Text used to flatten all
+        // of this into prose with no lists and no link targets.
+        $thread = $this->addThread(
+            '<div>Two things are <b>still</b> broken:</div>'
+            .'<ul><li>the export</li><li>the <i>weekly</i> report</li></ul>'
+            .'<div>See <a href="https://example.com/ticket/9">the ticket</a>.</div>'
+        );
+
+        $text = ThreadFormatter::body($thread);
+
+        $this->assertStringContainsString('**still**', $text);
+        $this->assertStringContainsString('- the export', $text);
+        $this->assertStringContainsString('*weekly*', $text);
+        $this->assertStringContainsString('[the ticket](https://example.com/ticket/9)', $text);
+    }
+
+    public function testAFormattedSignatureIsStillStripped()
+    {
+        // The signature is matched against the body as text. Both sides have to
+        // be converted the same way, or a signature with a link or a bold name
+        // in it never matches.
+        $signature = '<div>--</div><div><b>Ada Lovelace</b><br>'
+            .'<a href="https://example.com">example.com</a></div>';
+
+        $thread = $this->addThread(
+            '<div>Here is the answer you asked for.</div>'
+            .'<div><br></div>'
+            .$signature
+        );
+
+        $text = ThreadFormatter::body($thread, $signature);
+
+        $this->assertStringContainsString('Here is the answer you asked for.', $text);
+        $this->assertStringNotContainsString('Ada Lovelace', $text);
     }
 
     public function testTokenEstimatesAreConservative()

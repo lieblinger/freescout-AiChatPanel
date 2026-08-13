@@ -62,6 +62,13 @@ the tool registry is open: whoever owns those modules can add
 stored and reloaded is always the server's Parsedown + HTMLPurifier output. The
 browser-side renderer is a nicety; it is never what is trusted.
 
+The same reasoning applies to **Insert as reply**. It posts the message id to
+`/aichatpanel/chat/editor-html` and inserts what the server renders, rather than
+reusing the bubble it can already see: the bubble is rendered for a browser and
+keeps `<code>`, `<hr>` and `<del>`, which core's purifier drops the moment the
+draft is displayed or sent. One Markdown implementation, two output profiles —
+see `Services/Markdown/EditorHtmlProfile.php`.
+
 ### Per-user or per-mailbox cost accounting
 
 Token usage is reported per response. There is no aggregation, budget or quota.
@@ -137,6 +144,10 @@ FreeScout's own, so another locale is a single JSON file plus a
 
 Honest list of things that work but could be better.
 
+- **A code block loses its language.** Fenced code reaches a thread body as a
+  styled `<pre>`, because core's purifier keeps `class` only on `<table>` — so
+  `<code class="language-php">` has nowhere to live. Ordered lists lose a
+  `start` other than 1 for the same kind of reason.
 - **Signature stripping is best-effort.** Signatures are not marked up in any
   standard way. The module removes the rendered mailbox signature and cuts at
   sigdashes; an idiosyncratic signature will survive into the context. There is

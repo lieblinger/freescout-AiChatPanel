@@ -16,6 +16,7 @@
      data-url-history="{{ route('aichatpanel.chat.history') }}"
      data-url-send="{{ route('aichatpanel.chat.send') }}"
      data-url-confirm="{{ route('aichatpanel.chat.confirm') }}"
+     data-url-editor-html="{{ route('aichatpanel.chat.editor_html') }}"
      data-url-reset="{{ route('aichatpanel.chat.reset') }}"
      data-url-prefs="{{ route('aichatpanel.prefs') }}">
 

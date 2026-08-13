@@ -38,6 +38,7 @@ Two Eventy details that catch people out:
   - [A write tool](#a-write-tool)
   - [Registering them](#registering-them)
   - [Rules the registry enforces for you](#rules-the-registry-enforces-for-you)
+  - [Writing a thread body from a tool](#writing-a-thread-body-from-a-tool)
   - [Writing a good description](#writing-a-good-description)
 - [Context providers](#context-providers)
 - [Prompt shortcuts](#prompt-shortcuts)
@@ -287,6 +288,32 @@ You cannot opt out of these, and you do not have to implement them:
 7. **Exceptions never escape.** A `ToolException` message reaches the model; any
    other exception is logged with a stack trace and the model is told only that
    the tool failed.
+
+### Writing a thread body from a tool
+
+If your tool stores a reply, a note or a draft, take Markdown from the model and
+put it through `AbstractTool::renderBody()`:
+
+```php
+$thread->body = self::renderBody($arguments['body']);
+```
+
+That converts the Markdown to the HTML FreeScout's editor produces and sanitises
+it in the same step, so you do not need `htmlspecialchars()`,
+`\Helper::stripDangerousTags()` or anything else on top.
+
+The reason it is not just `nl2br(htmlspecialchars(...))`: everything in
+`threads.body` is run through core's HTMLPurifier config both when it is
+displayed and when it is rendered into outgoing mail, and that whitelist has no
+`<code>`, no `<hr>` and no `<del>`. `Services/Markdown/EditorHtmlProfile.php`
+is a strict subset of it, which is what keeps the formatting alive all the way
+to the customer's mailbox. Say so in your `parameters()` description, or the
+model will write plain text.
+
+Going the other way — reading a stored body back for the prompt — use
+`Services\Markdown\HtmlToMarkdown::fromThread()`, or
+`Context\ThreadFormatter::body()` if you also want the quote chain and signature
+removed.
 
 ### Writing a good description
 

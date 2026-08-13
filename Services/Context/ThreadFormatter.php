@@ -3,12 +3,15 @@
 namespace Modules\AiChatPanel\Services\Context;
 
 use App\Thread;
+use Modules\AiChatPanel\Services\Markdown\HtmlToMarkdown;
 
 /**
- * Turns a Thread into the clean plain text that goes into the prompt.
+ * Turns a Thread into the clean Markdown that goes into the prompt.
  *
  * Three jobs, in order:
- *   1. HTML to text, via core's Html2Text wrapper;
+ *   1. HTML to Markdown, so the model sees the structure the customer wrote —
+ *      a list stays a list, a link keeps its target — instead of the flattened
+ *      text core's Html2Text wrapper produces;
  *   2. cut the quoted reply chain, so a twelve-message thread does not repeat
  *      the first message twelve times;
  *   3. cut the signature.
@@ -20,7 +23,12 @@ use App\Thread;
 class ThreadFormatter
 {
     /**
-     * Plain text of a thread body, with quotes and signature removed.
+     * Markdown of a thread body, with quotes and signature removed.
+     *
+     * The quote chain is cut on the HTML, before conversion: the markers are
+     * HTML — \MailHelper::REPLY_SEPARATOR_HTML, <div class="gmail_quote"> and
+     * friends — and cutting first also means the quoted half is never converted
+     * at all.
      *
      * @param Thread      $thread
      * @param string|null $signature Rendered mailbox signature, when known.
@@ -37,7 +45,7 @@ class ThreadFormatter
 
         $html = self::stripQuotedHtml($html);
 
-        $text = \Helper::htmlToText($html, false, ['width' => 0]);
+        $text = HtmlToMarkdown::fromThread($html);
         $text = self::stripQuotedText($text);
         $text = self::stripSignature($text, $signature);
 
@@ -45,7 +53,7 @@ class ThreadFormatter
     }
 
     /**
-     * Plain text of a draft body, with nothing removed.
+     * Markdown of a draft body, with nothing removed.
      *
      * Deliberately not body(): quote and signature stripping are right for
      * history and wrong here. A draft is about to be rewritten verbatim, so
@@ -64,7 +72,11 @@ class ThreadFormatter
             return '';
         }
 
-        return self::collapse(\Helper::htmlToText($html, false, ['width' => 0]));
+        // Markdown, like every other body the model reads. It matters more
+        // here than anywhere else: the model reads a draft in order to rewrite
+        // it, and whatever it reads is what it writes back — so flattening the
+        // formatting here would strip it from the draft on the next edit.
+        return self::collapse(HtmlToMarkdown::fromThread($html));
     }
 
     /**
@@ -130,7 +142,10 @@ class ThreadFormatter
             '/^\s*Am .{10,120}\s+schrieb\s.{0,120}:\s*$/mi',
             '/^\s*Le .{10,120}\s+a écrit\s*:\s*$/mi',
             '/^\s*-{2,}\s*Original(?: Message| E-Mail|nachricht)?\s*-{2,}\s*$/mi',
-            '/^\s*_{10,}\s*$/m',
+            // The converter never escapes a line that is nothing but a run of
+            // underscores, dashes or equals signs, precisely so this keeps
+            // matching. The backslash is belt and braces.
+            '/^\s*[\\_]{10,}\s*$/m',
             '/^\s*From:\s.+$/mi',
             '/'.preg_quote(\MailHelper::REPLY_SEPARATOR_TEXT, '/').'/i',
         ];
@@ -168,7 +183,9 @@ class ThreadFormatter
     public static function stripSignature($text, $signature = null)
     {
         if ($signature) {
-            $signature_text = self::collapse(\Helper::htmlToText($signature, false, ['width' => 0]));
+            // Converted the same way as the body, or a signature with a link
+            // or a bold name in it would never match.
+            $signature_text = self::collapse(HtmlToMarkdown::fromThread($signature));
 
             if (mb_strlen($signature_text) > 3) {
                 $position = mb_strrpos($text, $signature_text);
