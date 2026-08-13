@@ -15,7 +15,7 @@
 */
 
 return [
-    'name' => 'AiChatPanel',
+    'name' => 'AI Chat Panel',
 
     // Hard ceilings the admin UI cannot exceed. These exist so a mistyped
     // setting cannot turn one chat message into an unbounded agent run.

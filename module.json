@@ -1,5 +1,5 @@
 {
-    "name": "AiChatPanel",
+    "name": "AI Chat Panel",
     "alias": "aichatpanel",
     "description": "Interactive AI chat panel for the conversation view, backed by any OpenAI-compatible LLM endpoint. Other modules can expose read and write capabilities to the model through an open tool registry.",
     "version": "1.0.0",
