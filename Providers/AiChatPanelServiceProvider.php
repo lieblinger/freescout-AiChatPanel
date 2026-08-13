@@ -32,6 +32,7 @@ class AiChatPanelServiceProvider extends ServiceProvider
         $this->registerSettings();
         $this->registerPanel();
         $this->registerCleanup();
+        $this->registerChangeTracking();
         $this->registerSchedule();
     }
 
@@ -46,6 +47,11 @@ class AiChatPanelServiceProvider extends ServiceProvider
         // what loadJsonTranslationsFrom reads. It must run in register(), not
         // boot(), to be in place before the first __() call.
         $this->loadJsonTranslationsFrom(__DIR__.'/../Resources/lang');
+
+        // One instance per request. The hooks in registerChangeTracking() fire
+        // deep inside core's model layer and must reach the same object the
+        // controller later reads.
+        $this->app->singleton(\Modules\AiChatPanel\Services\ChangeCollector::class);
 
         if ($this->app->runningInConsole()) {
             $this->commands([
@@ -214,6 +220,64 @@ class AiChatPanelServiceProvider extends ServiceProvider
         \Eventy::addAction('conversations.before_delete_forever', function ($conversation_ids) {
             \Modules\AiChatPanel\Entities\Chat::deleteForConversations($conversation_ids);
         }, 20, 1);
+    }
+
+    /**
+     * Notice what an AI turn changes in the conversation, so the page behind
+     * the panel can update without a reload.
+     *
+     * These hooks fire on every request, including every incoming email — the
+     * collector is inert until ChatController arms it, and each callback is
+     * wrapped because a broken panel must never take down mail fetching.
+     *
+     * The argument counts differ per hook and Eventy defaults to 1, so they are
+     * all stated explicitly. They are counted at the call site in core, not
+     * taken from the docs.
+     *
+     * @return void
+     */
+    protected function registerChangeTracking()
+    {
+        // core/app/Observers/ThreadObserver.php:92. Fires for drafts and line
+        // items too, which is the whole reason this is the right hook:
+        // SetStatusTool calls Conversation::changeStatus() and never sees the
+        // id of the line-item thread core creates inside it.
+        \Eventy::addAction('thread.created', function ($thread) {
+            try {
+                \Modules\AiChatPanel\Services\ChangeCollector::instance()->noteThread($thread);
+            } catch (\Exception $e) {
+                \Helper::logException($e, '[AiChatPanel] Recording a created thread failed: ');
+            }
+        }, 20, 1);
+
+        // core/app/Observers/ThreadObserver.php:102. UpdateDraftTool edits an
+        // existing thread, so it never fires thread.created — without this the
+        // rewritten draft would stay stale on the page until a reload.
+        \Eventy::addAction('thread.updated', function ($thread) {
+            try {
+                \Modules\AiChatPanel\Services\ChangeCollector::instance()->noteThread($thread, true);
+            } catch (\Exception $e) {
+                \Helper::logException($e, '[AiChatPanel] Recording an updated thread failed: ');
+            }
+        }, 20, 1);
+
+        // core/app/Conversation.php:1904 — four arguments.
+        \Eventy::addAction('conversation.status_changed', function ($conversation, $user, $changed_on_reply, $prev_status) {
+            try {
+                \Modules\AiChatPanel\Services\ChangeCollector::instance()->noteConversation($conversation);
+            } catch (\Exception $e) {
+                \Helper::logException($e, '[AiChatPanel] Recording a status change failed: ');
+            }
+        }, 20, 4);
+
+        // core/app/Conversation.php:1932 — three arguments.
+        \Eventy::addAction('conversation.user_changed', function ($conversation, $user, $prev_user_id) {
+            try {
+                \Modules\AiChatPanel\Services\ChangeCollector::instance()->noteConversation($conversation);
+            } catch (\Exception $e) {
+                \Helper::logException($e, '[AiChatPanel] Recording an assignee change failed: ');
+            }
+        }, 20, 3);
     }
 
     /**

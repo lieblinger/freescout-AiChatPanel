@@ -260,6 +260,11 @@ class AgentLoop
                 'ok'      => $result->ok,
                 'summary' => $result->summary ?: ($result->ok ? '' : $result->error),
             ]);
+
+            // Unconditional, not limited to tools declared as writes: a tool
+            // that changes something without saying so is still the user's
+            // conversation. An empty flush emits nothing.
+            $this->emitChanges();
         }
 
         return $paused;
@@ -516,6 +521,31 @@ class AgentLoop
     {
         if ($this->emit) {
             call_user_func($this->emit, $event, $payload);
+        }
+    }
+
+    /**
+     * Tell the panel what the tool that just ran changed in the conversation.
+     *
+     * Mid-turn on purpose. The assistant usually writes a paragraph after a
+     * write, and waiting for the done frame would leave the page stale for as
+     * long as that takes — or forever, if the user presses Stop.
+     *
+     * The frame carries ids only; it is a poke, not the data. The browser
+     * answers it by forcing a polycast poll, and core renders the thread.
+     *
+     * @return void
+     */
+    protected function emitChanges()
+    {
+        if (!$this->emit) {
+            return;
+        }
+
+        $changes = \Modules\AiChatPanel\Services\ChangeCollector::instance()->flush();
+
+        if ($changes) {
+            $this->emit('conversation_changed', $changes);
         }
     }
 }

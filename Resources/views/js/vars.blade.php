@@ -63,6 +63,7 @@ if (typeof(LangMessages) == "undefined") {
 		"copy_failed": "{{ __j('Could not copy.') }}",
 		"inserted": "{{ __j('Inserted into the editor. Review it before sending.') }}",
 		"no_editor": "{{ __j('The reply editor is not available on this page.') }}",
+		"open_draft": "{{ __j('Open in editor') }}",
 		"close_reply_first": "{{ __j('Close the open reply first.') }}",
 		"close_note_first": "{{ __j('Close the open note first, then insert as a reply.') }}",
 

@@ -368,6 +368,10 @@ body.aicp-resizing {
     background: #fdf6f6;
 }
 
+.aicp-open-draft {
+    white-space: nowrap;
+}
+
 .aicp-tool-name {
     font-family: Menlo, Monaco, Consolas, monospace;
 }
