@@ -3,6 +3,7 @@
     "alias": "aichatpanel",
     "description": "Interactive AI chat panel for the conversation view, backed by any OpenAI-compatible LLM endpoint. Other modules can expose read and write capabilities to the model through an open tool registry.",
     "version": "1.1.5",
+    "img": "/modules/aichatpanel/img/module.png",
     "detailsUrl": "https://github.com/lieblinger/freescout-AiChatPanel",
     "author": "Yannik Lieblinger",
     "authorUrl": "https://github.com/lieblinger",
