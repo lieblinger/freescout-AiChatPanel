@@ -113,6 +113,13 @@ class Message extends Model
      * body_html is the server-rendered, purified version; the client uses it
      * verbatim and never re-renders stored history itself.
      *
+     * The clock fields are formatted here rather than in JavaScript so they go
+     * through User::dateFormat like every other date in FreeScout: the viewer's
+     * timezone, their 12/24-hour preference and localised month and weekday
+     * names all come from there. Only the Today/Yesterday wording is left to
+     * the browser, because a server-computed "today" goes stale in a panel that
+     * stays open past midnight.
+     *
      * @return array
      */
     public function toPanelArray()
@@ -122,6 +129,8 @@ class Message extends Model
             self::ROLE_ASSISTANT => 'assistant',
             self::ROLE_TOOL      => 'tool',
         ];
+
+        $created = $this->created_at;
 
         return [
             'id'         => $this->id,
@@ -133,7 +142,36 @@ class Message extends Model
             'tool_name'  => (string) $this->tool_name,
             'status'     => (int) $this->status,
             'meta'       => $this->meta ?: [],
-            'created_at' => $this->created_at ? $this->created_at->toIso8601String() : null,
+            'created_at' => $created ? $created->toIso8601String() : null,
+            // copy(): dateFormat() calls setTimezone() on the instance it is
+            // given, which would otherwise reach through to created_at above.
+            'time'       => $created ? \App\User::dateFormat($created->copy(), 'H:i') : '',
+            'date_key'   => $created ? $this->localDateKey($created) : '',
+            'date_label' => $created ? \App\User::dateFormat($created->copy(), 'l, M j, Y') : '',
         ];
+    }
+
+    /**
+     * The calendar day this turn belongs to, in the viewer's timezone.
+     *
+     * Deliberately not User::dateFormat: that ends in formatLocalized(), so
+     * under a locale whose ICU data uses non-Latin digits the result would stop
+     * comparing equal to the YYYY-MM-DD the browser builds. This value is a
+     * grouping key, not something anyone reads.
+     *
+     * @param \Carbon\Carbon $created
+     *
+     * @return string
+     */
+    protected function localDateKey($created)
+    {
+        $date = $created->copy();
+        $user = auth()->user();
+
+        if ($user && $user->timezone) {
+            $date->setTimezone($user->timezone);
+        }
+
+        return $date->format('Y-m-d');
     }
 }

@@ -310,6 +310,9 @@ class AiChatPanelServiceProvider extends ServiceProvider
                         'open'  => (bool) $prefs->panel_open,
                         'width' => (int) $prefs->panel_width,
                     ],
+                    // The panel decides Today/Yesterday itself, so it needs the
+                    // same timezone the server formatted the messages in.
+                    'timezone'     => $user->timezone ?: (config('app.timezone') ?: \App\User::DEFAULT_TIMEZONE),
                 ])->render();
             } catch (\Exception $e) {
                 // A broken panel must never take down the conversation page.

@@ -216,6 +216,33 @@ body.aicp-resizing {
     margin-top: 10px;
 }
 
+/* Day separator: a centred label sitting on a hairline. The label paints the
+   panel background over the rule rather than the rule being split in two, so a
+   translated label of any length still clears it. */
+.aicp-day-separator {
+    position: relative;
+    text-align: center;
+    margin: 2px 0 12px;
+}
+
+.aicp-day-separator:before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    border-top: 1px solid #e6ebee;
+}
+
+.aicp-day-separator span {
+    position: relative; /* over the rule */
+    display: inline-block;
+    padding: 0 8px;
+    background: #fff;   /* .aicp-panel's background */
+    font-size: 11px;
+    color: #a8b3ba;
+}
+
 .aicp-message {
     margin-bottom: 12px;
 }
@@ -336,6 +363,12 @@ body.aicp-resizing {
     font-size: 11px;
     color: #a8b3ba;
     margin-top: 2px;
+}
+
+/* The user bubble leans right (margin-left: 24px); its time follows it. */
+.aicp-message-user .aicp-message-meta {
+    margin-left: 24px;
+    text-align: right;
 }
 
 /* Chain of thought: collapsed by default, it is not the answer. */

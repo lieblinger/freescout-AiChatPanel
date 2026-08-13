@@ -237,6 +237,14 @@
         $messages: null,
         $input: null,
         conversationId: null,
+        // Olson id of the viewer's FreeScout profile timezone. Only used to
+        // work out which calendar day "now" falls in; stored timestamps are
+        // already formatted server-side.
+        timezone: '',
+        // Day of the last message put on screen, so appendMessage knows when to
+        // draw a separator. Reset whenever the list is replaced.
+        lastDayKey: null,
+        todayKey: null,
         urls: {},
         loaded: false,
         busy: false,
@@ -268,6 +276,7 @@
         panel.$messages = $el.find('.aicp-messages');
         panel.$input = $el.find('.aicp-input');
         panel.conversationId = $el.attr('data-conversation-id');
+        panel.timezone = $el.attr('data-timezone') || '';
         panel.urls = {
             history: $el.attr('data-url-history'),
             send: $el.attr('data-url-send'),
@@ -574,7 +583,7 @@
         }
 
         panel.$input.val('');
-        appendMessage({role: 'user', body: text});
+        appendMessage({role: 'user', body: text, echo: true});
         clearNotices();
         setBusy(true);
 
@@ -592,6 +601,12 @@
                 stream: panel.streaming ? 1 : 0
             }
         }).done(function (response) {
+            // Before the branch: the user turn comes back on every shape of
+            // this response, and the bubble on screen is still unstamped.
+            if (response) {
+                stampEcho(response.messages);
+            }
+
             // Streaming is a two-step handshake: this POST creates the turn and
             // hands back a one-shot URL, because EventSource cannot POST.
             if (response && response.stream_url) {
@@ -603,12 +618,49 @@
         }).fail(function (xhr, status) {
             setBusy(false);
 
+            // Nothing will ever stamp this one; leaving the class on would let
+            // the next send stamp the wrong bubble.
+            panel.$messages.find('.aicp-echo').removeClass('aicp-echo');
+
             if (status === 'abort') {
                 return;
             }
 
             showPanelError(httpError(xhr));
         });
+    }
+
+    /**
+     * Give the optimistic user bubble its real timestamp.
+     *
+     * The bubble is drawn before the server has seen the message, so it has no
+     * time. The authoritative user turn comes back on the send response — both
+     * the streaming handshake and the plain one — and only the time is missing
+     * from what is already on screen, so patch it rather than re-render.
+     *
+     * Not doable from the SSE 'done' frame: that carries only the turns the
+     * assistant produced.
+     */
+    function stampEcho(messages) {
+        var $echo = panel.$messages.find('.aicp-message-user.aicp-echo').last();
+
+        if (!$echo.length) {
+            return;
+        }
+
+        var stamped = null;
+
+        $.each(messages || [], function (i, message) {
+            if (message.role === 'user' && message.time) {
+                stamped = message;
+            }
+        });
+
+        $echo.removeClass('aicp-echo');
+
+        if (stamped) {
+            $echo.append($('<div class="aicp-message-meta"></div>').text(stamped.time));
+        }
     }
 
     function handleTurnResponse(response) {
@@ -883,9 +935,116 @@
     // Rendering
     // ---------------------------------------------------------------------
 
+    /**
+     * 'YYYY-MM-DD' for an instant, in the viewer's FreeScout timezone — the
+     * same key the server puts on every message.
+     *
+     * Worked out here rather than sent along with the messages so a panel left
+     * open past midnight relabels itself instead of saying "Today" about
+     * yesterday. Returns null when the browser has no Intl or does not know the
+     * timezone id, in which case the caller falls back to the full date.
+     */
+    function dayKey(date) {
+        if (!window.Intl || !Intl.DateTimeFormat) {
+            return null;
+        }
+
+        var options = {year: 'numeric', month: '2-digit', day: '2-digit'};
+
+        if (panel.timezone) {
+            options.timeZone = panel.timezone;
+        }
+
+        try {
+            var formatter = new Intl.DateTimeFormat('en-CA', options);
+
+            if (!formatter.formatToParts) {
+                return null;
+            }
+
+            var parts = {};
+
+            $.each(formatter.formatToParts(date), function (i, part) {
+                parts[part.type] = part.value;
+            });
+
+            if (!parts.year || !parts.month || !parts.day) {
+                return null;
+            }
+
+            return parts.year + '-' + parts.month + '-' + parts.day;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * Calendar arithmetic on the key, not "now minus 24 hours": a local day is
+     * 23 or 25 hours long around a DST change.
+     */
+    function previousDayKey(key) {
+        var date = new Date(key + 'T00:00:00Z');
+
+        if (isNaN(date.getTime())) {
+            return null;
+        }
+
+        date.setUTCDate(date.getUTCDate() - 1);
+
+        return date.toISOString().slice(0, 10);
+    }
+
+    function dayLabel(key, full) {
+        var today = dayKey(new Date());
+
+        if (today && key === today) {
+            return t('day_today', 'Today');
+        }
+
+        if (today && key === previousDayKey(today)) {
+            return t('day_yesterday', 'Yesterday');
+        }
+
+        return full || key || '';
+    }
+
+    /**
+     * The full date is carried on the element as well as the label, so the
+     * separator can be relabelled in place when the day turns over.
+     */
+    function renderDaySeparator(key, full) {
+        return '<div class="aicp-day-separator" data-key="' + escapeHtml(key) + '"'
+            + ' data-full="' + escapeHtml(full || '') + '">'
+            + '<span>' + escapeHtml(dayLabel(key, full)) + '</span>'
+            + '</div>';
+    }
+
+    /**
+     * Past midnight every "Today" already on screen means yesterday. Cheap
+     * enough to re-check whenever something is appended.
+     */
+    function refreshDayLabels() {
+        var today = dayKey(new Date());
+
+        if (!today || today === panel.todayKey) {
+            return;
+        }
+
+        panel.todayKey = today;
+
+        panel.$messages.find('.aicp-day-separator').each(function () {
+            var $separator = $(this);
+
+            $separator.children('span').text(
+                dayLabel($separator.attr('data-key'), $separator.attr('data-full'))
+            );
+        });
+    }
+
     function renderMessages(messages, replace) {
         if (replace) {
             panel.$messages.empty();
+            panel.lastDayKey = null;
         }
 
         if (replace && (!messages || !messages.length)) {
@@ -910,8 +1069,6 @@
     }
 
     function appendMessage(message) {
-        panel.$messages.find('.aicp-empty').remove();
-
         var html = '';
 
         if (message.role === 'user') {
@@ -922,20 +1079,41 @@
             html = renderAssistantMessage(message);
         }
 
-        if (html) {
-            panel.$messages.find('.aicp-typing').before(html);
+        // A turn that only asked for tools renders nothing. It must not consume
+        // the day separator, or the next real message of that day loses it.
+        if (!html) {
+            return;
+        }
 
-            if (!panel.$messages.find('.aicp-typing').length) {
-                panel.$messages.append(html);
-            }
+        panel.$messages.find('.aicp-empty').remove();
+        refreshDayLabels();
+
+        // The optimistic echo has no server fields: it is being written now, so
+        // now is its day.
+        var key = message.date_key || dayKey(new Date());
+
+        if (key && key !== panel.lastDayKey) {
+            html = renderDaySeparator(key, message.date_label) + html;
+            panel.lastDayKey = key;
+        }
+
+        var $typing = panel.$messages.find('.aicp-typing');
+
+        if ($typing.length) {
+            $typing.before(html);
+        } else {
+            panel.$messages.append(html);
         }
 
         scrollToBottom();
     }
 
     function renderUserMessage(message) {
-        return '<div class="aicp-message aicp-message-user">'
+        return '<div class="aicp-message aicp-message-user' + (message.echo ? ' aicp-echo' : '') + '">'
             + '<div class="aicp-bubble">' + escapeHtml(message.body).replace(/\n/g, '<br>') + '</div>'
+            // The echo has no time yet; stampEcho() fills it in once the server
+            // has seen the message.
+            + (message.time ? '<div class="aicp-message-meta">' + escapeHtml(message.time) + '</div>' : '')
             + '</div>';
     }
 
@@ -947,7 +1125,9 @@
                 + '<div class="aicp-bubble">'
                 + '<i class="glyphicon glyphicon-exclamation-sign"></i> '
                 + escapeHtml(message.body)
-                + '</div></div>';
+                + '</div>'
+                + renderMeta(message)
+                + '</div>';
         }
 
         // A turn that only asked for tools has no text of its own.
@@ -1006,7 +1186,7 @@
         // Before the actions, not after them: the action row keeps its height
         // while it is invisible, which would push the meta line away from the
         // answer it belongs to.
-        html += renderMeta(message.meta);
+        html += renderMeta(message);
 
         if ($.trim(message.body || '')) {
             html += '<div class="aicp-message-actions">'
@@ -1022,12 +1202,15 @@
         return html + '</div>';
     }
 
-    function renderMeta(meta) {
-        if (!meta) {
-            return '';
-        }
-
+    function renderMeta(message) {
+        var meta = message.meta || {};
         var parts = [];
+
+        // Formatted server-side, so it already carries the viewer's timezone
+        // and their 12/24-hour preference.
+        if (message.time) {
+            parts.push(message.time);
+        }
 
         // Token counts stay in the stored meta for support and debugging, but
         // they are not something the agent needs while working.

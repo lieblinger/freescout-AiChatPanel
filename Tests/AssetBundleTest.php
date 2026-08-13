@@ -70,6 +70,11 @@ class AssetBundleTest extends AiChatPanelTestCase
         // string the moment the panel broke for an unrelated reason.
         $this->assertStringContainsString('aicp-panel', $html, 'The panel did not render.');
 
+        // The panel works out Today/Yesterday itself and needs the same
+        // timezone the messages were formatted in; without the attribute every
+        // day separator silently falls back to the full date.
+        $this->assertStringContainsString('data-timezone="', $html);
+
         foreach (['marked.min.js', 'purify.min.js'] as $file) {
             $this->assertMatchesRegularExpression(
                 '~<script[^>]+src="[^"]*/modules/aichatpanel/js/vendor/'.preg_quote($file, '~').'~',

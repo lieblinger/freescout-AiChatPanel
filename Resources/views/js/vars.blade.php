@@ -53,6 +53,12 @@ if (typeof(LangMessages) == "undefined") {
 		"tool_ran": "{{ __j('Ran :tool') }}",
 		"tool_failed": "{{ __j(':tool failed') }}",
 
+		{{-- Day separators. Every other date is formatted server-side; only
+		     these two are decided in the browser, so "Today" stays true in a
+		     panel that is open past midnight. --}}
+		"day_today": "{{ __j('Today') }}",
+		"day_yesterday": "{{ __j('Yesterday') }}",
+
 		{{-- Message actions --}}
 		"insert_reply": "{{ __j('Insert into reply') }}",
 		"insert_reply_short": "{{ __j('Reply') }}",

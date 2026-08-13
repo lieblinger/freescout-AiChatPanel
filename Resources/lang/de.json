@@ -196,6 +196,8 @@
     "The assistant wants to make a change": "Der Assistent möchte eine Änderung vornehmen",
     "Approve": "Bestätigen",
     "Reject": "Ablehnen",
+    "Today": "Heute",
+    "Yesterday": "Gestern",
     "{0} No other conversations|{1} 1 other conversation|[2,*] :count other conversations": "{0} Keine weiteren Gespräche|{1} 1 weiteres Gespräch|[2,*] :count weitere Gespräche",
     "{0} No drafts on #:number|{1} Read 1 draft on #:number|[2,*] Read :count drafts on #:number": "{0} Keine Entwürfe zu #:number|{1} 1 Entwurf zu #:number gelesen|[2,*] :count Entwürfe zu #:number gelesen",
     "{1} the oldest message|[2,*] the :count oldest messages": "{1} die älteste Nachricht|[2,*] die :count ältesten Nachrichten",

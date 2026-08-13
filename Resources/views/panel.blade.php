@@ -13,6 +13,7 @@
      data-mailbox-id="{{ $conversation->mailbox_id }}"
      data-open="{{ $prefs['open'] ? '1' : '0' }}"
      data-width="{{ $prefs['width'] }}"
+     data-timezone="{{ $timezone }}"
      data-url-history="{{ route('aichatpanel.chat.history') }}"
      data-url-send="{{ route('aichatpanel.chat.send') }}"
      data-url-confirm="{{ route('aichatpanel.chat.confirm') }}"
