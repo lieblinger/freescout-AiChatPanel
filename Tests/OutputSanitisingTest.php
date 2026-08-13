@@ -105,4 +105,51 @@ class OutputSanitisingTest extends AiChatPanelTestCase
         $this->assertStringNotContainsString('<script', $panel['html']);
         $this->assertStringContainsString('Hello', $panel['html']);
     }
+
+    /**
+     * module.js builds its markup as strings, and its escapeHtml() is text-node
+     * escaping: it leaves " and ' alone, which is correct between tags and
+     * wrong inside an attribute. data-body carries raw model output, so a
+     * single quote in an answer would have closed the attribute and let the
+     * rest of the answer be parsed as further attributes — an onmouseover=
+     * among them.
+     *
+     * There is no JavaScript test harness here, so guard the rule statically:
+     * every value interpolated into a double-quoted attribute goes through
+     * escapeAttr(), never escapeHtml().
+     *
+     * @return void
+     */
+    public function testAttributeValuesInTheClientRendererAreQuoteEscaped()
+    {
+        $js = file_get_contents(__DIR__.'/../Public/js/module.js');
+
+        $this->assertStringContainsString(
+            'function escapeAttr(',
+            $js,
+            'escapeAttr() is gone; attribute values have nothing escaping their quotes.'
+        );
+
+        // It has to add the quote characters on top of escapeHtml, or it is
+        // just escapeHtml under another name.
+        $this->assertMatchesRegularExpression(
+            '/function escapeAttr\([^)]*\)\s*\{[^}]*&quot;[^}]*\}/s',
+            $js,
+            'escapeAttr() no longer escapes the double quote.'
+        );
+
+        // Every `foo="' + something` in the file, with what follows it.
+        preg_match_all('/="\'\s*\+\s*(\w+)\(/', $js, $matches, PREG_OFFSET_CAPTURE);
+
+        $this->assertNotEmpty($matches[1], 'The attribute-building pattern changed; this guard no longer checks anything.');
+
+        foreach ($matches[1] as $match) {
+            $this->assertEquals(
+                'escapeAttr',
+                $match[0],
+                'An attribute value at offset '.$match[1].' of module.js is built with '
+                .$match[0].'(), which does not escape quotes. Use escapeAttr().'
+            );
+        }
+    }
 }

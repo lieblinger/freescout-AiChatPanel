@@ -42,6 +42,17 @@
         return $('<div>').text(text == null ? '' : String(text)).html();
     }
 
+    /**
+     * escapeHtml for a value going into a double-quoted attribute.
+     *
+     * Text-node escaping leaves the quote characters alone — correct between
+     * tags, wrong inside an attribute, where a single " in model output ends
+     * the value early and everything after it is parsed as further attributes.
+     */
+    function escapeAttr(text) {
+        return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     function alertBox(type, message) {
         return '<div class="alert alert-' + type + '">' + escapeHtml(message) + '</div>';
     }
@@ -1013,8 +1024,8 @@
      * separator can be relabelled in place when the day turns over.
      */
     function renderDaySeparator(key, full) {
-        return '<div class="aicp-day-separator" data-key="' + escapeHtml(key) + '"'
-            + ' data-full="' + escapeHtml(full || '') + '">'
+        return '<div class="aicp-day-separator" data-key="' + escapeAttr(key) + '"'
+            + ' data-full="' + escapeAttr(full || '') + '">'
             + '<span>' + escapeHtml(dayLabel(key, full)) + '</span>'
             + '</div>';
     }
@@ -1171,8 +1182,8 @@
         // data-id is what the insert buttons post back, so the server can
         // render this answer for the editor instead of the panel.
         var html = '<div class="aicp-message aicp-message-assistant"'
-            + (message.id ? ' data-id="' + escapeHtml(String(message.id)) + '"' : '')
-            + ' data-body="' + escapeHtml(message.body || '') + '">';
+            + (message.id ? ' data-id="' + escapeAttr(String(message.id)) + '"' : '')
+            + ' data-body="' + escapeAttr(message.body || '') + '">';
 
         if ($.trim(message.reasoning || '')) {
             html += '<div class="aicp-reasoning">'
@@ -1190,11 +1201,11 @@
 
         if ($.trim(message.body || '')) {
             html += '<div class="aicp-message-actions">'
-                + '<button type="button" class="btn btn-link btn-xs aicp-action-reply" title="' + escapeHtml(t('insert_reply', 'Insert into reply')) + '">'
+                + '<button type="button" class="btn btn-link btn-xs aicp-action-reply" title="' + escapeAttr(t('insert_reply', 'Insert into reply')) + '">'
                 + '<i class="glyphicon glyphicon-share-alt"></i> ' + escapeHtml(t('insert_reply_short', 'Reply')) + '</button>'
-                + '<button type="button" class="btn btn-link btn-xs aicp-action-note" title="' + escapeHtml(t('insert_note', 'Insert as internal note')) + '">'
+                + '<button type="button" class="btn btn-link btn-xs aicp-action-note" title="' + escapeAttr(t('insert_note', 'Insert as internal note')) + '">'
                 + '<i class="glyphicon glyphicon-edit"></i> ' + escapeHtml(t('insert_note_short', 'Note')) + '</button>'
-                + '<button type="button" class="btn btn-link btn-xs aicp-action-copy" title="' + escapeHtml(t('copy', 'Copy')) + '">'
+                + '<button type="button" class="btn btn-link btn-xs aicp-action-copy" title="' + escapeAttr(t('copy', 'Copy')) + '">'
                 + '<i class="glyphicon glyphicon-duplicate"></i> ' + escapeHtml(t('copy', 'Copy')) + '</button>'
                 + '</div>';
         }
@@ -1281,7 +1292,7 @@
             return '';
         }
 
-        return ' <a href="#" class="aicp-open-draft" data-thread_id="' + escapeHtml(String(threadId)) + '">'
+        return ' <a href="#" class="aicp-open-draft" data-thread_id="' + escapeAttr(String(threadId)) + '">'
             + escapeHtml(t('open_draft', 'Open in editor'))
             + '</a>';
     }
