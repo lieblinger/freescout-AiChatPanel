@@ -53,7 +53,9 @@ class AddNoteTool extends AbstractTool
             'properties' => [
                 'body' => [
                     'type'        => 'string',
-                    'description' => 'The note text. Plain text or simple HTML. Keep it short and factual.',
+                    'description' => 'The note, written in Markdown. Notes are internal, so headings, tables, '
+                        .'inline `code` and fenced code blocks are appropriate here as well as lists, bold and '
+                        .'links. Keep it short and factual. Do not include images or raw HTML; both are removed.',
                     'minLength'   => 1,
                     'maxLength'   => 20000,
                 ],
@@ -113,9 +115,11 @@ class AddNoteTool extends AbstractTool
         }
 
         // Model output is untrusted: it is influenced by customer-written text.
-        // Strip anything executable before it is stored and later rendered in
-        // the conversation view.
-        $body = \Helper::stripDangerousTags(nl2br(htmlspecialchars($body, ENT_QUOTES, 'UTF-8')));
+        // toEditorHtml() runs it through HTMLPurifier with a profile narrower
+        // than core's, so nothing executable survives and no further stripping
+        // is needed here — \Helper::stripDangerousTags() on purifier output
+        // would be dead code that implies the purifier is not trusted.
+        $body = self::renderBody($body);
 
         $thread = Thread::createExtended([
             'type'                => Thread::TYPE_NOTE,

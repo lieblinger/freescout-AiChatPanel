@@ -109,7 +109,9 @@ class DraftEditingTest extends AiChatPanelTestCase
 
         $draft = $draft->fresh();
 
-        $this->assertEquals('Shorter.', $draft->body);
+        // A draft body is HTML: the tool takes Markdown and stores what the
+        // reply editor produces, so a one-line body is one <div>.
+        $this->assertEquals('<div>Shorter.</div>', $draft->body);
         $this->assertEquals(Thread::STATE_DRAFT, $draft->state, 'Editing must not publish the draft.');
         $this->assertEquals($draft->id, $result->data['thread_id'], 'The same thread must be reused, not replaced.');
         $this->assertFalse($result->data['sent']);
@@ -120,7 +122,7 @@ class DraftEditingTest extends AiChatPanelTestCase
         $draft = $this->addDraft('Original.');
 
         $this->assertTrue($this->update(['body' => 'New text.'])->ok);
-        $this->assertEquals('New text.', $draft->fresh()->body);
+        $this->assertEquals('<div>New text.</div>', $draft->fresh()->body);
     }
 
     public function testItRefusesToGuessBetweenSeveralDrafts()
@@ -147,7 +149,7 @@ class DraftEditingTest extends AiChatPanelTestCase
         $this->assertTrue($this->update(['body' => 'Rewritten.', 'thread_id' => $second->id])->ok);
 
         $this->assertEquals('First draft.', $first->fresh()->body);
-        $this->assertEquals('Rewritten.', $second->fresh()->body);
+        $this->assertEquals('<div>Rewritten.</div>', $second->fresh()->body);
     }
 
     public function testItRejectsAThreadFromAnotherConversation()
@@ -202,7 +204,7 @@ class DraftEditingTest extends AiChatPanelTestCase
 
         $note = $note->fresh();
 
-        $this->assertEquals('Better draft note.', $note->body);
+        $this->assertEquals('<div>Better draft note.</div>', $note->body);
         $this->assertEquals(Thread::TYPE_NOTE, $note->type);
         $this->assertEquals(Thread::STATE_DRAFT, $note->state);
     }
@@ -228,7 +230,7 @@ class DraftEditingTest extends AiChatPanelTestCase
         $this->assertNotNull($other->edited_at);
     }
 
-    public function testTheNewBodyIsEscapedBeforeItIsStored()
+    public function testTheNewBodyIsSanitisedBeforeItIsStored()
     {
         $draft = $this->addDraft('Harmless.');
 
@@ -236,8 +238,15 @@ class DraftEditingTest extends AiChatPanelTestCase
 
         $body = $draft->fresh()->body;
 
-        $this->assertStringNotContainsString('<script>', $body, 'Model output is untrusted and must not reach the editor as markup.');
-        $this->assertStringContainsString('alert(1)', $body, 'The text itself should survive, escaped.');
+        $this->assertStringNotContainsString('<script', $body, 'Model output is untrusted and must not reach the editor as markup.');
+
+        // The body is converted from Markdown by HTMLPurifier now rather than
+        // escaped, so a script element is removed with its content instead of
+        // being shown to the agent as text. Same rule as the chat panel's own
+        // rendering — see OutputSanitisingTest::testScriptTagsAreRemoved().
+        $this->assertStringNotContainsString('alert(1)', $body);
+        $this->assertStringContainsString('Hello', $body);
+        $this->assertStringContainsString('there', $body);
     }
 
     public function testAUserWithoutAccessCannotEditTheDraft()

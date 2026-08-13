@@ -59,7 +59,10 @@ class UpdateDraftTool extends AbstractTool
             'properties' => [
                 'body' => [
                     'type'        => 'string',
-                    'description' => 'The complete new text of the draft, replacing what is there now. Plain text; line breaks are preserved. Do not include a signature, it is added automatically.',
+                    'description' => 'The complete new text of the draft, in Markdown, replacing what is there now. '
+                        .'The same formatting is available as in conversation.create_draft_reply, and what you were '
+                        .'shown by conversation.get_drafts is Markdown too — keep the formatting you were given unless '
+                        .'you were asked to change it. Do not include a signature, it is added automatically.',
                     'minLength'   => 1,
                     'maxLength'   => 50000,
                 ],
@@ -144,9 +147,11 @@ class UpdateDraftTool extends AbstractTool
         $thread = $this->resolve($arguments, $context);
 
         // Model output is untrusted — it is influenced by customer-written text.
-        // Escape it before it is stored and later rendered into the reply
-        // editor, exactly as conversation.create_draft_reply does.
-        $thread->body = \Helper::stripDangerousTags(nl2br(htmlspecialchars($body, ENT_QUOTES, 'UTF-8')));
+        // renderBody() converts the Markdown and sanitises it in one step,
+        // exactly as conversation.create_draft_reply does. It matters twice
+        // over here: the model read this draft as Markdown, so writing it back
+        // as escaped text would strip the formatting on every edit.
+        $thread->body = self::renderBody($body);
 
         // Core stamps the editor only when it is not the author, and reads it
         // back to render "X edited Y's draft" (app/Thread.php:721). Following

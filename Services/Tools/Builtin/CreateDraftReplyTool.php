@@ -58,7 +58,11 @@ class CreateDraftReplyTool extends AbstractTool
             'properties' => [
                 'body' => [
                     'type'        => 'string',
-                    'description' => 'The reply text addressed to the customer. Plain text; line breaks are preserved. Do not include a signature, it is added automatically.',
+                    'description' => 'The reply to the customer, written in Markdown. Paragraphs, **bold**, '
+                        .'*italic*, ~~strikethrough~~, bullet and numbered lists (nesting is fine), links, block '
+                        .'quotes, horizontal rules and tables are all rendered. Keep a customer reply plain: short '
+                        .'paragraphs, lists for steps, links for URLs. Do not include a signature, it is added '
+                        .'automatically. Do not include images or raw HTML; both are removed.',
                     'minLength'   => 1,
                     'maxLength'   => 50000,
                 ],
@@ -149,9 +153,10 @@ class CreateDraftReplyTool extends AbstractTool
         $thread->customer_id = $customer->id;
         $thread->created_by_user_id = $context->user->id;
         $thread->user_id = $conversation->user_id;
-        // Model output is untrusted; escape it before it is stored and later
-        // rendered into the reply editor.
-        $thread->body = \Helper::stripDangerousTags(nl2br(htmlspecialchars($body, ENT_QUOTES, 'UTF-8')));
+        // Model output is untrusted. renderBody() ends in HTMLPurifier with a
+        // profile narrower than core's own, so what is stored here is already
+        // what core would allow at display and at send time.
+        $thread->body = self::renderBody($body);
         $thread->setTo([$customer->getMainEmail()]);
         $thread->save();
 
