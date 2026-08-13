@@ -293,29 +293,32 @@ Running the test suite — no test talks to a real model:
 # From the FreeScout root.
 php artisan config:clear
 
-APP_KEY="base64:$(openssl rand -base64 32)" \
-DB_CONNECTION=testing CACHE_DRIVER=array SESSION_DRIVER=array \
-  ./vendor/bin/phpunit --stderr Modules/AiChatPanel/Tests
+./vendor/bin/phpunit Modules/AiChatPanel/Tests
 
 php artisan freescout:clear-cache
 ```
 
-Four things in that command are load-bearing, and the suite fails in confusing
-ways without them:
+**`config:clear` first** is load-bearing: `phpunit.xml`'s env block is ignored
+entirely while `bootstrap/cache/config.php` exists, and `freescout:clear-cache`
+leaves the config cached. Without it the suite runs against the **live
+database** — the base test case refuses to run when `database.default` is not
+`testing`, so it fails loudly rather than quietly. `freescout:clear-cache`
+afterwards puts the config cache back.
 
-- **`config:clear` first.** `phpunit.xml`'s env block is ignored entirely while
-  `bootstrap/cache/config.php` exists, and `freescout:clear-cache` leaves the
-  config cached. Without this the suite runs against the **live database**. The
-  base test case refuses to run if `database.default` is not `testing`, so this
-  fails loudly rather than quietly.
-- **A real `APP_KEY`.** Core's `phpunit.xml` sets `APP_KEY="value_from_phpunit"`,
-  which is not a valid cipher key, so every HTTP test dies in the cookie
-  encrypter once the config cache is gone.
-- **`--stderr`.** Core's global `ResponseHeaders` middleware calls
-  `header_remove()`; once PHPUnit has written a progress dot to stdout, PHP
-  considers headers sent and that raises. (Upstream sidesteps the same problem
-  by skipping its one HTTP test on PHP below 8.4.)
-- **`freescout:clear-cache` afterwards**, to put the config cache back.
+The HTTP tests additionally need two core-side fixes, both of which landed in
+core rather than being worked around here:
+
+- `phpunit.xml` must supply a 32-byte `APP_KEY`. It used to set
+  `value_from_phpunit`, which is 18, and `config/app.php` pins the cipher to
+  AES-256-CBC — so every request test died in the cookie encrypter.
+- The global `ResponseHeaders` middleware must not call `header_remove()` once
+  headers are sent. Under the CLI SAPI they count as sent from PHPUnit's first
+  line of output, so the call raised and every request 500'd before reaching a
+  route.
+
+Upstream never hit either one because `tests/Feature`'s request tests return
+early on PHP below 8.4. On a core without those fixes, run the suite with
+`--stderr` and a `APP_KEY="base64:$(openssl rand -base64 32)"` prefix instead.
 
 First run only:
 
