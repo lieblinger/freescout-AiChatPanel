@@ -161,9 +161,14 @@ class ContextBuilder
         $lines[] = '- You never contact the customer. Anything you write is a draft the agent reviews and sends themselves.';
         $lines[] = '- Your reply goes to the agent in the chat panel, and that is where the answer belongs. Summaries, explanations, analyses, suggestions and answers to questions are written there and nowhere else.';
         $lines[] = '- A tool that changes the conversation is only for when the agent asks for that change. "Summarise this", "what is still open", "explain this" and the like are questions to answer in the chat — do not put the answer in a note, a draft or the status instead. If you think a change would help, say so and let the agent ask.';
+        $lines[] = '- A message that is neither a question nor an instruction to you, but reads as something meant for the customer — an answer to what they asked, a decision, a date, a price — is probably the raw material of a reply. Say what you would draft from it, ask whether to go ahead, then stop and wait for the answer. Offer every time, however obvious it looks: the same sentence can be material for the customer or context for you, and only the agent knows which.';
+        $lines[] = '- Once they say yes, write it out properly: follow the rules above and the language and tone set for this mailbox, keep every fact they gave you, add none they did not, and save it with conversation.create_draft_reply.';
         $lines[] = '- Be concise and concrete. Prefer the facts in the conversation over general advice.';
         $lines[] = '- If the conversation does not contain enough information to answer, say so plainly instead of inventing details.';
         $lines[] = '- Never invent order numbers, prices, dates, policies or names. If you need a fact you do not have, say what is missing.';
+        $lines[] = '- Attachments reach you as a filename and a type, nothing more. You cannot see an image or read a document, and a filename is not evidence of what is in the file: "Kontakt_im_Rahmen.JPG" tells you someone named a photo, not what it shows. Never say you have looked at, seen, examined or checked an attachment, and never describe what one contains.';
+        $lines[] = '- You also cannot attach anything to a draft. Never write that something is attached, enclosed or included — if something needs attaching, write the draft without it and tell the agent what to attach.';
+        $lines[] = '- Never state that an action has already been taken — an order placed, a request passed to a colleague, a check carried out, a message forwarded — unless the conversation or the agent says it was. The same goes for what happens next: promise nothing on the agent\'s behalf that they have not told you.';
         $lines[] = '- Contact details for the agent and the customer are stored data. Quote them exactly; never guess or reformat them.';
         $lines[] = '- Never tell the agent something cannot be done without calling the tool first. The tools enforce their own limits and say so clearly; report what a tool actually returned, not what you expect it to return.';
         $lines[] = '- Do not end drafts with a sign-off or signature block: the help desk appends the agent\'s signature on send, so yours would be a duplicate.';
@@ -195,6 +200,20 @@ class ContextBuilder
         } else {
             $lines[] = '- This conversation has no draft right now, whatever earlier messages in this chat say: one written before may since have been sent or discarded.';
             $lines[] = '- If the agent asks you to prepare a reply, call conversation.create_draft_reply. Do not tell them a draft already exists.';
+        }
+
+        // An empty conversation is where invention has the most room: there is
+        // no thread block, so nothing below contradicts a plausible-sounding
+        // sentence, and the model writes the letter it expects rather than the
+        // one the agent asked for. Say the emptiness out loud — silence reads
+        // as "nothing worth mentioning", not as "you know nothing here".
+        if (!$this->context->conversation->threads()->count()) {
+            $lines[] = '';
+            $lines[] = 'This conversation is empty:';
+            $lines[] = '- Nothing has been sent to the customer and nothing has been received from them. There is no history below because there is none.';
+            $lines[] = '- So everything you know about it is what the agent types in this chat. Write that and nothing else.';
+            $lines[] = '- Do not add a reason, a background, a thank-you for something received, a promise about what happens next, a date, an amount or a next step unless the agent gave it to you. A first mail that invents its own context is worse than a short one.';
+            $lines[] = '- If what they gave you is too thin for the mail they asked for, write what you can and ask for the rest. Do not fill the gap yourself.';
         }
 
         $language = trim((string) $this->context->setting('reply_language'));

@@ -124,7 +124,7 @@ class ContextBuilderTest extends AiChatPanelTestCase
             $this->addThread('<div>Message number '.$i.'. '.str_repeat('padding text ', 120).'</div>');
         }
 
-        $this->setSettings(['max_context_tokens' => 1500]);
+        $this->setSettings(['max_context_tokens' => 2000]);
 
         $built = (new ContextBuilder($this->context()))->build(0);
 
@@ -201,7 +201,7 @@ class ContextBuilderTest extends AiChatPanelTestCase
             // block) plus one provider, not two. Tracks the size of the fixed
             // part, so it needs raising whenever that grows.
             'context_providers'  => ['test.important', 'test.optional'],
-            'max_context_tokens' => 1250,
+            'max_context_tokens' => 2000,
         ]);
 
         $built = (new ContextBuilder($this->context()))->build(0);
@@ -287,6 +287,159 @@ class ContextBuilderTest extends AiChatPanelTestCase
         $this->assertGreaterThanOrEqual(100, TokenBudget::estimate($text));
         $this->assertEquals(0, TokenBudget::estimate(''));
     }
+
+    /**
+     * The answer belongs in the chat, not written into the conversation.
+     *
+     * Asked to "summarise this thread in five bullet points" the model called
+     * conversation.add_note and put the summary there, because nothing in the
+     * prompt said where an answer goes: the rules covered what it must not send
+     * to the customer, and what tools exist, but not that a question is
+     * answered in the panel. A note is a real, visible change to someone's
+     * conversation, so the distinction is not cosmetic.
+     *
+     * @return void
+     */
+    public function testThePromptSendsAnswersToTheChatNotToTools()
+    {
+        $prompt = (new ContextBuilder($this->context()))->build()['content'];
+
+        $this->assertStringContainsString(
+            'chat panel',
+            $prompt,
+            'The prompt no longer tells the model that its reply goes to the agent in the chat.'
+        );
+
+        $this->assertStringContainsString(
+            'only for when the agent asks for that change',
+            $prompt,
+            'The prompt no longer restricts write tools to changes the agent asked for, so a '
+                .'summary can end up in an internal note again.'
+        );
+    }
+
+    /**
+     * The agent's own text becomes a draft only after they say so.
+     *
+     * An agent who types the answer to the customer's question wants it turned
+     * into a proper reply, in the mailbox's language and tone. But the same
+     * sentence just as often is context handed to the assistant, and only the
+     * agent knows which — so the model offers and waits rather than guessing in
+     * either direction.
+     *
+     * @return void
+     */
+    public function testThePromptOffersADraftInsteadOfAssumingOne()
+    {
+        $prompt = (new ContextBuilder($this->context()))->build()['content'];
+
+        $this->assertStringContainsString(
+            'raw material of a reply',
+            $prompt,
+            'The prompt no longer recognises the agent typing reply material, so their text is '
+                .'answered as if it were a question.'
+        );
+
+        $this->assertStringContainsString(
+            'stop and wait for the answer',
+            $prompt,
+            'The prompt no longer makes the model wait, so it drafts from the agent text '
+                .'without being asked.'
+        );
+
+        $this->assertStringContainsString(
+            'however obvious it looks',
+            $prompt,
+            'The prompt lets the model skip the question when the text looks obviously '
+                .'customer-facing, which is exactly where it is most likely to be wrong.'
+        );
+    }
+
+    /**
+     * An empty conversation says so, loudly.
+     *
+     * With no threads there is no history block, so nothing in the prompt
+     * contradicts a plausible-sounding sentence and the model writes the letter
+     * it expects rather than the one it was given: a thank-you for something
+     * never received, a promise about a next step nobody mentioned. Grounded
+     * conversations do not need this — the threads are the ground.
+     *
+     * @return void
+     */
+    public function testAnEmptyConversationTellsTheModelItKnowsNothing()
+    {
+        $prompt = (new ContextBuilder($this->context()))->build()['content'];
+
+        $this->assertStringContainsString(
+            'This conversation is empty',
+            $prompt,
+            'An empty conversation no longer announces itself, so the model has nothing telling '
+                .'it that it has no facts to work from.'
+        );
+
+        $this->assertStringContainsString(
+            'Write that and nothing else',
+            $prompt,
+            'The prompt no longer confines the model to what the agent typed on an empty '
+                .'conversation.'
+        );
+    }
+
+    /**
+     * A conversation with history does not get the empty-conversation rules.
+     *
+     * @return void
+     */
+    public function testAConversationWithHistoryIsNotCalledEmpty()
+    {
+        $this->addThread('Guten Tag, wann kommt meine Lieferung?');
+
+        $prompt = (new ContextBuilder($this->context()))->build()['content'];
+
+        $this->assertStringNotContainsString(
+            'This conversation is empty',
+            $prompt,
+            'A conversation with messages is being told it is empty, which contradicts the '
+                .'history right below it.'
+        );
+    }
+
+    /**
+     * It must not claim attachments or actions it cannot have.
+     *
+     * Real drafts on a well-grounded conversation said "Die Unterlagen habe ich
+     * Ihnen angehängt" and "Die Fotos im Anhang habe ich mir angesehen" on a
+     * conversation with no attachments at all, and "Ich habe Ihre Anfrage
+     * bereits an Frau Nickel weitergegeben" for something nobody had done. None
+     * of that is a missing fact the context could have supplied — the model
+     * cannot attach files, cannot see images, and cannot act outside its tools.
+     *
+     * @return void
+     */
+    public function testThePromptForbidsInventedAttachmentsAndActions()
+    {
+        $prompt = (new ContextBuilder($this->context()))->build()['content'];
+
+        $this->assertStringContainsString(
+            'a filename is not evidence of what is in the file',
+            $prompt,
+            'Nothing stops the model telling a customer that documents are attached when it '
+                .'has attached nothing and cannot.'
+        );
+
+        $this->assertStringContainsString(
+            'Never say you have looked at, seen, examined or checked an attachment',
+            $prompt,
+            'Nothing stops the model claiming to have examined images it cannot see.'
+        );
+
+        $this->assertStringContainsString(
+            'Never state that an action has already been taken',
+            $prompt,
+            'Nothing stops the model reporting orders placed or requests forwarded that nobody '
+                .'carried out.'
+        );
+    }
 }
 
 /**
@@ -364,33 +517,4 @@ class ThrowingContextProvider implements ContextProvider
         throw new \RuntimeException('provider exploded');
     }
 
-    /**
-     * The answer belongs in the chat, not written into the conversation.
-     *
-     * Asked to "summarise this thread in five bullet points" the model called
-     * conversation.add_note and put the summary there, because nothing in the
-     * prompt said where an answer goes: the rules covered what it must not send
-     * to the customer, and what tools exist, but not that a question is
-     * answered in the panel. A note is a real, visible change to someone's
-     * conversation, so the distinction is not cosmetic.
-     *
-     * @return void
-     */
-    public function testThePromptSendsAnswersToTheChatNotToTools()
-    {
-        $prompt = (new ContextBuilder($this->context()))->build()['system'];
-
-        $this->assertStringContainsString(
-            'chat panel',
-            $prompt,
-            'The prompt no longer tells the model that its reply goes to the agent in the chat.'
-        );
-
-        $this->assertStringContainsString(
-            'only for when the agent asks for that change',
-            $prompt,
-            'The prompt no longer restricts write tools to changes the agent asked for, so a '
-                .'summary can end up in an internal note again.'
-        );
-    }
 }
