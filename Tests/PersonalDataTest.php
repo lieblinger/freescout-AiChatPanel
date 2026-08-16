@@ -8,7 +8,7 @@ use Modules\AiChatPanel\Services\Tools\Builtin\GetCustomerTool;
 
 /**
  * Personal data reaching the model: the agent's own details inline, the
- * customer's stored profile through customer.get, and the send_personal_data
+ * customer's stored profile through customer_get, and the send_personal_data
  * switch that governs both.
  *
  * The authorisation boundary is core's, not ours — CustomerPolicy for the
@@ -135,7 +135,7 @@ class PersonalDataTest extends AiChatPanelTestCase
     }
 
     // -----------------------------------------------------------------------
-    // customer.get
+    // customer_get
     // -----------------------------------------------------------------------
 
     public function testCustomerGetReturnsTheCompleteStoredProfile()

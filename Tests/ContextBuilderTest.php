@@ -292,7 +292,7 @@ class ContextBuilderTest extends AiChatPanelTestCase
      * The answer belongs in the chat, not written into the conversation.
      *
      * Asked to "summarise this thread in five bullet points" the model called
-     * conversation.add_note and put the summary there, because nothing in the
+     * conversation_add_note and put the summary there, because nothing in the
      * prompt said where an answer goes: the rules covered what it must not send
      * to the customer, and what tools exist, but not that a question is
      * answered in the panel. A note is a real, visible change to someone's

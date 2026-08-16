@@ -113,6 +113,10 @@ class ToolRegistry
             $enabled_names = [];
         }
 
+        // Installs configured before the builtins were renamed still hold the
+        // old dotted names.
+        $enabled_names = array_map([__CLASS__, 'canonicalName'], $enabled_names);
+
         $writes_allowed = (bool) Settings::get('write_tools_enabled');
 
         $available = [];
@@ -153,13 +157,16 @@ class ToolRegistry
     public function toApiDefinitions()
     {
         $definitions = [];
+        $available = $this->available();
 
-        foreach ($this->available() as $name => $tool) {
+        foreach ($this->wireNames($available) as $wire => $name) {
+            $tool = $available[$name];
+
             try {
                 $definitions[] = [
                     'type'     => 'function',
                     'function' => [
-                        'name'        => $name,
+                        'name'        => $wire,
                         'description' => $tool->description(),
                         'parameters'  => $this->normaliseSchema($tool->parameters()),
                     ],
@@ -170,6 +177,85 @@ class ToolRegistry
         }
 
         return $definitions;
+    }
+
+    /**
+     * The name a tool is offered under on the wire.
+     *
+     * OpenAI and Anthropic both require ^[a-zA-Z0-9_-]{1,64}$ for a function
+     * name and reject the whole request — not just the offending tool — when it
+     * does not match. Local endpoints are lenient, which is exactly why this has
+     * to be enforced here rather than trusted to the tool author: a module
+     * registering "acme.do_thing" through the aichatpanel.tools filter must not
+     * be able to break every completion.
+     *
+     * @param string $name
+     *
+     * @return string
+     */
+    public static function apiName($name)
+    {
+        return substr(preg_replace('/[^a-zA-Z0-9_-]/', '_', (string) $name), 0, 64);
+    }
+
+    /**
+     * Old dotted names of the builtin tools, mapped to what they are called now.
+     *
+     * tools_enabled and write_tools_autorun are stored per install, so an
+     * upgrade would otherwise silently turn every configured tool off.
+     *
+     * @param string $name
+     *
+     * @return string
+     */
+    public static function canonicalName($name)
+    {
+        $legacy = [
+            'conversation.list_customer_conversations' => 'conversation_list_customer_conversations',
+            'conversation.get'                         => 'conversation_get',
+            'conversation.get_drafts'                  => 'conversation_get_drafts',
+            'conversation.add_note'                    => 'conversation_add_note',
+            'conversation.set_status'                  => 'conversation_set_status',
+            'conversation.create_draft_reply'          => 'conversation_create_draft_reply',
+            'conversation.update_draft'                => 'conversation_update_draft',
+            'customer.get'                             => 'customer_get',
+        ];
+
+        return isset($legacy[$name]) ? $legacy[$name] : $name;
+    }
+
+    /**
+     * wire name => internal name, for one set of tools.
+     *
+     * Sanitising can collide two distinct names ("a.b" and "a_b"), which would
+     * silently route one tool's calls to the other. The loser gets a numeric
+     * suffix instead.
+     *
+     * @param Tool[] $tools
+     *
+     * @return array
+     */
+    protected function wireNames(array $tools)
+    {
+        $map = [];
+
+        foreach (array_keys($tools) as $name) {
+            $wire = self::apiName($name);
+
+            if (isset($map[$wire])) {
+                $stem = substr($wire, 0, 62);
+
+                for ($suffix = 2; isset($map[$stem.'_'.$suffix]); $suffix++) {
+                    // Find the first free one.
+                }
+
+                $wire = $stem.'_'.$suffix;
+            }
+
+            $map[$wire] = $name;
+        }
+
+        return $map;
     }
 
     /**
@@ -186,7 +272,19 @@ class ToolRegistry
     {
         $available = $this->available();
 
-        return isset($available[$name]) ? $available[$name] : null;
+        if (isset($available[$name])) {
+            return $available[$name];
+        }
+
+        // The model answers with the name it was given, which is the sanitised
+        // one whenever a tool's own name is not wire-safe.
+        $wire_names = $this->wireNames($available);
+
+        if (isset($wire_names[$name])) {
+            return $available[$wire_names[$name]];
+        }
+
+        return null;
     }
 
     /**
@@ -353,7 +451,11 @@ class ToolRegistry
 
         $autorun = Settings::get('write_tools_autorun');
 
-        return is_array($autorun) && in_array($tool->name(), $autorun);
+        if (!is_array($autorun)) {
+            return false;
+        }
+
+        return in_array($tool->name(), array_map([__CLASS__, 'canonicalName'], $autorun));
     }
 
     /**
@@ -390,8 +492,8 @@ class ToolRegistry
     public static function neverAutoRun()
     {
         return [
-            'conversation.create_draft_reply',
-            'conversation.update_draft',
+            'conversation_create_draft_reply',
+            'conversation_update_draft',
         ];
     }
 

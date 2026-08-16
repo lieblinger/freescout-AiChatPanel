@@ -33,7 +33,7 @@ class GetDraftsTool extends AbstractTool
      */
     public function name()
     {
-        return 'conversation.get_drafts';
+        return 'conversation_get_drafts';
     }
 
     /**
@@ -43,7 +43,7 @@ class GetDraftsTool extends AbstractTool
     {
         return 'Read the unsent drafts on a conversation, with the thread id of each. '
             .'A draft has NOT been sent and the customer has not seen it. Call this before '
-            .'changing a draft with conversation.update_draft, and whenever the agent refers '
+            .'changing a draft with conversation_update_draft, and whenever the agent refers '
             .'to "the draft" — drafts are not part of the conversation history you were given, '
             .'and a draft you saw earlier in this chat may since have changed. '
             .'Returns an empty list when there are none.';
@@ -119,7 +119,7 @@ class GetDraftsTool extends AbstractTool
     /**
      * Another conversation, by the number the interface shows.
      *
-     * Same rule as conversation.get: one the user may not view is reported as
+     * Same rule as conversation_get: one the user may not view is reported as
      * not found rather than forbidden, because the difference is itself
      * information.
      *

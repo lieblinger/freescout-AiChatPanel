@@ -72,8 +72,12 @@ class SettingsController extends Controller
         try {
             $models = $this->client($request)->models();
 
+            // The allowlist is read by a human, so it is written in an order a
+            // human can scan. OpenRouter answers in no order at all.
+            natcasesort($models);
+
             $response['status'] = 'success';
-            $response['models'] = $models;
+            $response['models'] = array_values($models);
 
             if (!$models) {
                 $response['msg_success'] = __('The endpoint does not list models. Enter a model name manually.');

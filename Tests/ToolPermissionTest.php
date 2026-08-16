@@ -61,8 +61,77 @@ class ToolPermissionTest extends AiChatPanelTestCase
             'name'
         );
 
-        $this->assertContains('test.echo', $names);
-        $this->assertNotContains('test.forbidden', $names, 'An unauthorised tool must not be offered to the model.');
+        $this->assertContains('test_echo', $names);
+        $this->assertNotContains('test_forbidden', $names, 'An unauthorised tool must not be offered to the model.');
+    }
+
+    public function testAToolNameIsSanitisedBeforeItGoesOnTheWire()
+    {
+        // OpenAI and Anthropic require ^[a-zA-Z0-9_-]{1,64}$ and reject the
+        // whole request — every tool, not just the offending one — when a name
+        // does not match. Local endpoints accept anything, which is how dotted
+        // names survived this long.
+        $names = array_column(
+            array_column($this->registry()->toApiDefinitions(), 'function'),
+            'name'
+        );
+
+        foreach ($names as $name) {
+            $this->assertMatchesRegularExpression(
+                '/^[a-zA-Z0-9_-]{1,64}$/',
+                $name,
+                $name.' is not a valid function name.'
+            );
+        }
+
+        $this->assertNotEmpty($names);
+    }
+
+    public function testAToolCalledByItsSanitisedNameStillResolves()
+    {
+        // The model answers with the name it was given, not the internal one.
+        $result = $this->registry()->execute('test_echo', '{"text":"hi"}');
+
+        $this->assertTrue($result->ok);
+        $this->assertEquals(1, EchoTool::$calls);
+    }
+
+    public function testTwoNamesThatSanitiseAlikeStayDistinct()
+    {
+        // "test.echo" and "test_echo" both sanitise to "test_echo"; routing one
+        // tool's calls to the other would be worse than dropping it.
+        \Eventy::addFilter(ToolRegistry::FILTER, function ($tools) {
+            $tools[] = new Support\EchoTool2();
+
+            return $tools;
+        }, 30, 2);
+
+        $this->setSettings([
+            'tools_enabled' => ['test.echo', 'test_echo', 'test.forbidden', 'test.write'],
+        ]);
+
+        $names = array_column(
+            array_column($this->registry()->toApiDefinitions(), 'function'),
+            'name'
+        );
+
+        $this->assertCount(count(array_unique($names)), $names, 'Two tools must never share a wire name.');
+        $this->assertContains('test_echo', $names);
+        $this->assertContains('test_echo_2', $names);
+    }
+
+    public function testSettingsWrittenBeforeTheBuiltinsWereRenamedStillWork()
+    {
+        // An existing install has the old dotted names stored in tools_enabled.
+        // Reading them literally would turn every configured tool off on upgrade.
+        $this->setSettings([
+            'tools_enabled' => ['conversation.get', 'customer.get'],
+        ]);
+
+        $names = array_keys($this->registry()->available());
+
+        $this->assertContains('conversation_get', $names);
+        $this->assertContains('customer_get', $names);
     }
 
     public function testAForbiddenToolIsRejectedWhenCalledAnyway()
@@ -149,7 +218,7 @@ class ToolPermissionTest extends AiChatPanelTestCase
     public function testTheDraftReplyToolCanNeverBeAutorun()
     {
         // Even if an administrator manages to get it into the list.
-        $this->setSettings(['write_tools_autorun' => ['conversation.create_draft_reply']]);
+        $this->setSettings(['write_tools_autorun' => ['conversation_create_draft_reply']]);
 
         $registry = $this->registry();
         $tool = new \Modules\AiChatPanel\Services\Tools\Builtin\CreateDraftReplyTool();

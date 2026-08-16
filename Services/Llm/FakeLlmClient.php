@@ -8,7 +8,7 @@ namespace Modules\AiChatPanel\Services\Llm;
  * Queue up what the endpoint should answer, then assert on what was sent:
  *
  *     $client = new FakeLlmClient();
- *     $client->queueToolCall('conversation.get', ['number' => 7]);
+ *     $client->queueToolCall('conversation_get', ['number' => 7]);
  *     $client->queueText('Conversation 7 is about billing.');
  *     ...
  *     $this->assertCount(2, $client->payloads);

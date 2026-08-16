@@ -33,7 +33,7 @@ class UpdateDraftTool extends AbstractTool
      */
     public function name()
     {
-        return 'conversation.update_draft';
+        return 'conversation_update_draft';
     }
 
     /**
@@ -44,7 +44,7 @@ class UpdateDraftTool extends AbstractTool
         return 'Replace the text of an existing draft on the current conversation. Use this '
             .'whenever the agent asks for a change to a draft — shorter, more formal, add a '
             .'sentence — instead of creating a new one. Read the draft with '
-            .'conversation.get_drafts first and send the complete new text: this replaces the '
+            .'conversation_get_drafts first and send the complete new text: this replaces the '
             .'body, it does not append to it. The draft is still NOT sent; a human reviews it '
             .'and sends it themselves.';
     }
@@ -60,15 +60,15 @@ class UpdateDraftTool extends AbstractTool
                 'body' => [
                     'type'        => 'string',
                     'description' => 'The complete new text of the draft, in Markdown, replacing what is there now. '
-                        .'The same formatting is available as in conversation.create_draft_reply, and what you were '
-                        .'shown by conversation.get_drafts is Markdown too — keep the formatting you were given unless '
+                        .'The same formatting is available as in conversation_create_draft_reply, and what you were '
+                        .'shown by conversation_get_drafts is Markdown too — keep the formatting you were given unless '
                         .'you were asked to change it. Do not include a signature, it is added automatically.',
                     'minLength'   => 1,
                     'maxLength'   => 50000,
                 ],
                 'thread_id' => [
                     'type'        => 'integer',
-                    'description' => 'Which draft to replace, from conversation.get_drafts. Optional when the conversation has exactly one draft.',
+                    'description' => 'Which draft to replace, from conversation_get_drafts. Optional when the conversation has exactly one draft.',
                     'minimum'     => 1,
                 ],
             ],
@@ -148,7 +148,7 @@ class UpdateDraftTool extends AbstractTool
 
         // Model output is untrusted — it is influenced by customer-written text.
         // renderBody() converts the Markdown and sanitises it in one step,
-        // exactly as conversation.create_draft_reply does. It matters twice
+        // exactly as conversation_create_draft_reply does. It matters twice
         // over here: the model read this draft as Markdown, so writing it back
         // as escaped text would strip the formatting on every edit.
         $thread->body = self::renderBody($body);
@@ -199,7 +199,7 @@ class UpdateDraftTool extends AbstractTool
 
         if (!count($drafts)) {
             throw new ToolException(
-                'This conversation has no draft to update. Use conversation.create_draft_reply '
+                'This conversation has no draft to update. Use conversation_create_draft_reply '
                 .'to write one, or tell the user there is nothing to change.'
             );
         }
@@ -217,7 +217,7 @@ class UpdateDraftTool extends AbstractTool
                 // on threads the user may not be looking at.
                 throw new ToolException(
                     'Thread '.$thread_id.' is not a draft on this conversation. It may have been sent '
-                    .'or discarded. Call conversation.get_drafts to see what is there now.'
+                    .'or discarded. Call conversation_get_drafts to see what is there now.'
                 );
             }
 
@@ -227,7 +227,7 @@ class UpdateDraftTool extends AbstractTool
         if (count($drafts) > 1) {
             throw new ToolException(
                 'This conversation has '.count($drafts).' drafts, so it is not clear which one to '
-                .'change. Call conversation.get_drafts and pass the thread_id of the one you mean. '
+                .'change. Call conversation_get_drafts and pass the thread_id of the one you mean. '
                 .'Thread ids: '.$drafts->pluck('id')->implode(', ').'.'
             );
         }

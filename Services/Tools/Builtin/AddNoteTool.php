@@ -30,7 +30,7 @@ class AddNoteTool extends AbstractTool
      */
     public function name()
     {
-        return 'conversation.add_note';
+        return 'conversation_add_note';
     }
 
     /**

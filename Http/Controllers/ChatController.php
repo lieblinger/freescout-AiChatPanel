@@ -1016,19 +1016,88 @@ class ChatController extends Controller
      */
     protected function modelChoices()
     {
+        $catalogue = $this->modelCatalogue();
         $allowed = Settings::allowedModels();
 
         if ($allowed) {
-            return $allowed;
+            $by_id = [];
+
+            foreach ($catalogue as $entry) {
+                $by_id[$entry['id']] = $entry;
+            }
+
+            $catalogue = [];
+
+            foreach ($allowed as $id) {
+                // An allowlisted model the endpoint does not describe is still
+                // offered under its bare id: the admin typed it on purpose, and
+                // the endpoint may simply not implement /v1/models.
+                $catalogue[] = isset($by_id[$id]) ? $by_id[$id] : CurlLlmClient::describeModel($id);
+            }
         }
 
-        return \Cache::remember('aichatpanel.models', 5, function () {
+        return self::sortModels($catalogue);
+    }
+
+    /**
+     * What the endpoint says about every model it offers.
+     *
+     * @return array
+     */
+    protected function modelCatalogue()
+    {
+        return \Cache::remember('aichatpanel.model_catalogue', 5, function () {
             try {
-                return CurlLlmClient::fromSettings()->models();
+                return CurlLlmClient::fromSettings()->catalogue();
             } catch (\Exception $e) {
                 return [];
             }
         });
+    }
+
+    /**
+     * Vendor first, then model, both case-insensitive and natural so that
+     * "Llama 4" does not sort before "Llama 31".
+     *
+     * Ungrouped models go last: they are the hand-entered and single-model
+     * cases, and burying them above a vendor heading reads as a mistake.
+     *
+     * @param array $models
+     *
+     * @return array
+     */
+    public static function sortModels(array $models)
+    {
+        usort($models, function ($a, $b) {
+            if (($a['group'] === '') !== ($b['group'] === '')) {
+                return $a['group'] === '' ? 1 : -1;
+            }
+
+            $group = strnatcasecmp($a['group'], $b['group']);
+
+            return $group ?: strnatcasecmp($a['label'], $b['label']);
+        });
+
+        return $models;
+    }
+
+    /**
+     * What the catalogue says about a model's tool support, or null when it is
+     * not listed.
+     *
+     * @param string $model
+     *
+     * @return bool|null
+     */
+    protected function catalogueToolSupport($model)
+    {
+        foreach ($this->modelCatalogue() as $entry) {
+            if ($entry['id'] === $model) {
+                return $entry['tools'];
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -1054,10 +1123,18 @@ class ChatController extends Controller
 
         $model = $this->currentModel($context, Chat::findOrCreateFor($context->conversation->id, $context->user->id));
 
+        $supports = Settings::modelSupportsTools($model);
+
+        if ($supports === null) {
+            // Nothing probed yet. OpenRouter states tool support outright, so
+            // use it rather than promising tools until the first failure.
+            $supports = $this->catalogueToolSupport($model);
+        }
+
         return [
             'count'           => count($names),
             'tools'           => $names,
-            'model_supports'  => Settings::modelSupportsTools($model) !== false,
+            'model_supports'  => $supports !== false,
         ];
     }
 

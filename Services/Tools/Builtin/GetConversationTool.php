@@ -31,7 +31,7 @@ class GetConversationTool extends AbstractTool
      */
     public function name()
     {
-        return 'conversation.get';
+        return 'conversation_get';
     }
 
     /**
@@ -41,7 +41,7 @@ class GetConversationTool extends AbstractTool
     {
         return 'Fetch a single conversation by its number, including its messages. '
             .'Use this when the customer or the agent refers to another ticket by number, '
-            .'or after conversation.list_customer_conversations to read one of the results. '
+            .'or after conversation_list_customer_conversations to read one of the results. '
             .'Internal notes are only included when the mailbox allows it.';
     }
 

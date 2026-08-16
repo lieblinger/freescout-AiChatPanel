@@ -162,7 +162,7 @@ class ContextBuilder
         $lines[] = '- Your reply goes to the agent in the chat panel, and that is where the answer belongs. Summaries, explanations, analyses, suggestions and answers to questions are written there and nowhere else.';
         $lines[] = '- A tool that changes the conversation is only for when the agent asks for that change. "Summarise this", "what is still open", "explain this" and the like are questions to answer in the chat — do not put the answer in a note, a draft or the status instead. If you think a change would help, say so and let the agent ask.';
         $lines[] = '- A message that is neither a question nor an instruction to you, but reads as something meant for the customer — an answer to what they asked, a decision, a date, a price — is probably the raw material of a reply. Say what you would draft from it, ask whether to go ahead, then stop and wait for the answer. Offer every time, however obvious it looks: the same sentence can be material for the customer or context for you, and only the agent knows which.';
-        $lines[] = '- Once they say yes, write it out properly: follow the rules above and the language and tone set for this mailbox, keep every fact they gave you, add none they did not, and save it with conversation.create_draft_reply.';
+        $lines[] = '- Once they say yes, write it out properly: follow the rules above and the language and tone set for this mailbox, keep every fact they gave you, add none they did not, and save it with conversation_create_draft_reply.';
         $lines[] = '- Be concise and concrete. Prefer the facts in the conversation over general advice.';
         $lines[] = '- If the conversation does not contain enough information to answer, say so plainly instead of inventing details.';
         $lines[] = '- Never invent order numbers, prices, dates, policies or names. If you need a fact you do not have, say what is missing.';
@@ -188,18 +188,18 @@ class ContextBuilder
         // and refuses to write a new one.
         //
         // The bodies are not here on purpose: they live behind
-        // conversation.get_drafts, because this system message is built once per
+        // conversation_get_drafts, because this system message is built once per
         // request and would be stale the moment the model edited a draft.
         $lines[] = '';
         $lines[] = 'Drafts:';
 
         if (count($this->drafts())) {
             $lines[] = '- This conversation has unsent draft(s), listed under "Unsent drafts" below. Nobody has received them.';
-            $lines[] = '- To read a draft, call conversation.get_drafts. Do not answer from the draft text in this chat: it may already have been changed.';
-            $lines[] = '- While a draft exists, change it with conversation.update_draft and its thread id rather than creating a second one.';
+            $lines[] = '- To read a draft, call conversation_get_drafts. Do not answer from the draft text in this chat: it may already have been changed.';
+            $lines[] = '- While a draft exists, change it with conversation_update_draft and its thread id rather than creating a second one.';
         } else {
             $lines[] = '- This conversation has no draft right now, whatever earlier messages in this chat say: one written before may since have been sent or discarded.';
-            $lines[] = '- If the agent asks you to prepare a reply, call conversation.create_draft_reply. Do not tell them a draft already exists.';
+            $lines[] = '- If the agent asks you to prepare a reply, call conversation_create_draft_reply. Do not tell them a draft already exists.';
         }
 
         // An empty conversation is where invention has the most room: there is
@@ -302,7 +302,7 @@ class ContextBuilder
      * One line saying whether unsent drafts exist, and which thread ids they are.
      *
      * Existence, not content. The model needs to know there is something to
-     * read before it will reach for conversation.get_drafts; the bodies stay in
+     * read before it will reach for conversation_get_drafts; the bodies stay in
      * that tool, where they are re-read fresh after every edit and cost nothing
      * on the messages that never mention them.
      *
@@ -328,7 +328,7 @@ class ContextBuilder
         }
 
         return 'Unsent drafts: '.count($drafts).' ('.implode('; ', $parts).'). '
-            .'Not sent — nobody has received them. Read one with conversation.get_drafts.';
+            .'Not sent — nobody has received them. Read one with conversation_get_drafts.';
     }
 
     /**
@@ -438,13 +438,13 @@ class ContextBuilder
 
         // Bind the first person explicitly. Without this the model reads "add
         // my number to the draft" as being about the customer and reaches for
-        // customer.get, which returns the wrong person's details — or none, and
+        // customer_get, which returns the wrong person's details — or none, and
         // it then says it cannot find them.
         $header = 'You are helping this agent. When the person you are chatting with says "I", "me" or "my", '
             .'they mean this person, never the customer.';
 
         if (count($rows) > 1) {
-            $header .= ' Their own details are below; do not call customer.get to look them up, that tool returns the customer.';
+            $header .= ' Their own details are below; do not call customer_get to look them up, that tool returns the customer.';
         } else {
             $header .= ' Beyond their name you have no details for them: say so rather than offering the customer\'s.';
         }

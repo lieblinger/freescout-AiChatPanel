@@ -24,7 +24,7 @@ use Modules\AiChatPanel\Services\Tools\ToolResult;
  *     one place where an unattended mistake reaches a customer.
  *   - while a draft exists it refuses to create another, so a model in a loop
  *     cannot bury the agent's own work under a pile of drafts. Changing a draft
- *     that already exists is conversation.update_draft's job, not a second
+ *     that already exists is conversation_update_draft's job, not a second
  *     create. Once that draft is sent or discarded this tool works again: the
  *     check is on the conversation as it is now, not a slot spent for good.
  */
@@ -35,7 +35,7 @@ class CreateDraftReplyTool extends AbstractTool
      */
     public function name()
     {
-        return 'conversation.create_draft_reply';
+        return 'conversation_create_draft_reply';
     }
 
     /**
@@ -141,9 +141,9 @@ class CreateDraftReplyTool extends AbstractTool
         if ($existing) {
             throw new ToolException(
                 'This conversation already has a draft (thread '.$existing->id.'). Do not create a '
-                .'second one. To change what it says, call conversation.update_draft with '
+                .'second one. To change what it says, call conversation_update_draft with '
                 .'thread_id '.$existing->id.' and the full new text; read it first with '
-                .'conversation.get_drafts if you have not already.'
+                .'conversation_get_drafts if you have not already.'
             );
         }
 

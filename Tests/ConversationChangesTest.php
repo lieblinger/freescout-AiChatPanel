@@ -26,9 +26,9 @@ class ConversationChangesTest extends AiChatPanelTestCase
 
         $this->setSettings([
             'tools_enabled' => [
-                'conversation.create_draft_reply',
-                'conversation.add_note',
-                'conversation.set_status',
+                'conversation_create_draft_reply',
+                'conversation_add_note',
+                'conversation_set_status',
             ],
         ]);
 
@@ -90,7 +90,7 @@ class ConversationChangesTest extends AiChatPanelTestCase
         $this->actingAs($this->agent);
         $this->collector()->arm($this->conversation->id);
 
-        $result = $this->runTool('conversation.create_draft_reply', ['body' => 'Sorry for the delay.']);
+        $result = $this->runTool('conversation_create_draft_reply', ['body' => 'Sorry for the delay.']);
 
         $this->assertTrue($result->ok, 'The draft tool should have succeeded: '.$result->error);
 
@@ -119,7 +119,7 @@ class ConversationChangesTest extends AiChatPanelTestCase
         $this->actingAs($this->agent);
         $this->collector()->arm($this->conversation->id);
 
-        $result = $this->runTool('conversation.set_status', ['status' => 'closed']);
+        $result = $this->runTool('conversation_set_status', ['status' => 'closed']);
 
         $this->assertTrue($result->ok, 'The status tool should have succeeded: '.$result->error);
 
@@ -141,7 +141,7 @@ class ConversationChangesTest extends AiChatPanelTestCase
         $this->actingAs($this->agent);
         $this->collector()->arm($this->conversation->id);
 
-        $result = $this->runTool('conversation.add_note', ['body' => 'Checked the order.']);
+        $result = $this->runTool('conversation_add_note', ['body' => 'Checked the order.']);
 
         $this->assertTrue($result->ok, 'The note tool should have succeeded: '.$result->error);
 
@@ -163,14 +163,14 @@ class ConversationChangesTest extends AiChatPanelTestCase
     {
         $this->actingAs($this->agent);
         $this->setSettings(['tools_enabled' => [
-            'conversation.create_draft_reply',
-            'conversation.update_draft',
+            'conversation_create_draft_reply',
+            'conversation_update_draft',
         ]]);
 
         // Create the draft in a turn of its own, the way a real session does,
         // so the edit lands on a thread the browser has already seen.
         $this->collector()->arm($this->conversation->id);
-        $this->runTool('conversation.create_draft_reply', ['body' => 'First attempt.']);
+        $this->runTool('conversation_create_draft_reply', ['body' => 'First attempt.']);
 
         $draft = Thread::where('conversation_id', $this->conversation->id)
             ->where('state', Thread::STATE_DRAFT)
@@ -182,7 +182,7 @@ class ConversationChangesTest extends AiChatPanelTestCase
         app()->forgetInstance(ChangeCollector::class);
         $this->collector()->arm($this->conversation->id);
 
-        $result = $this->runTool('conversation.update_draft', ['body' => 'Second attempt, better.']);
+        $result = $this->runTool('conversation_update_draft', ['body' => 'Second attempt, better.']);
 
         $this->assertTrue($result->ok, 'The update tool should have succeeded: '.$result->error);
 
@@ -206,14 +206,14 @@ class ConversationChangesTest extends AiChatPanelTestCase
     {
         $this->actingAs($this->agent);
         $this->setSettings(['tools_enabled' => [
-            'conversation.create_draft_reply',
-            'conversation.update_draft',
+            'conversation_create_draft_reply',
+            'conversation_update_draft',
         ]]);
 
         $this->collector()->arm($this->conversation->id);
 
-        $this->runTool('conversation.create_draft_reply', ['body' => 'First attempt.']);
-        $this->runTool('conversation.update_draft', ['body' => 'Second attempt, better.']);
+        $this->runTool('conversation_create_draft_reply', ['body' => 'First attempt.']);
+        $this->runTool('conversation_update_draft', ['body' => 'Second attempt, better.']);
 
         $changes = $this->collector()->snapshot();
 
@@ -225,18 +225,18 @@ class ConversationChangesTest extends AiChatPanelTestCase
     {
         $this->actingAs($this->agent);
         $this->setSettings(['tools_enabled' => [
-            'conversation.create_draft_reply',
-            'conversation.update_draft',
+            'conversation_create_draft_reply',
+            'conversation_update_draft',
         ]]);
 
         $this->collector()->arm($this->conversation->id);
-        $this->runTool('conversation.create_draft_reply', ['body' => 'First attempt.']);
+        $this->runTool('conversation_create_draft_reply', ['body' => 'First attempt.']);
 
         $before = $this->polycastRows()->count();
 
         app()->forgetInstance(ChangeCollector::class);
         $this->collector()->arm($this->conversation->id);
-        $this->runTool('conversation.update_draft', ['body' => 'Second attempt, better.']);
+        $this->runTool('conversation_update_draft', ['body' => 'Second attempt, better.']);
 
         $this->assertEquals($before + 1, $this->polycastRows()->count());
     }
@@ -279,13 +279,13 @@ class ConversationChangesTest extends AiChatPanelTestCase
         $this->actingAs($this->agent);
         $this->collector()->arm($this->conversation->id);
 
-        $this->runTool('conversation.add_note', ['body' => 'first']);
+        $this->runTool('conversation_add_note', ['body' => 'first']);
 
         $first = $this->collector()->flush();
 
         $this->assertCount(1, $first['thread_ids']);
 
-        $this->runTool('conversation.add_note', ['body' => 'second']);
+        $this->runTool('conversation_add_note', ['body' => 'second']);
 
         $second = $this->collector()->flush();
 
@@ -300,7 +300,7 @@ class ConversationChangesTest extends AiChatPanelTestCase
         $this->actingAs($this->agent);
         $this->collector()->arm($this->conversation->id);
 
-        $this->runTool('conversation.set_status', ['status' => 'closed']);
+        $this->runTool('conversation_set_status', ['status' => 'closed']);
 
         $this->assertNotNull($this->collector()->flush());
         $this->assertNull($this->collector()->flush());
@@ -315,7 +315,7 @@ class ConversationChangesTest extends AiChatPanelTestCase
         $this->actingAs($this->agent);
         $this->collector()->arm($this->conversation->id);
 
-        $this->runTool('conversation.create_draft_reply', ['body' => 'Sorry for the delay.']);
+        $this->runTool('conversation_create_draft_reply', ['body' => 'Sorry for the delay.']);
 
         $draft = Thread::where('conversation_id', $this->conversation->id)
             ->where('state', Thread::STATE_DRAFT)
@@ -349,7 +349,7 @@ class ConversationChangesTest extends AiChatPanelTestCase
 
         $before = \Carbon\Carbon::now()->toDateTimeString();
 
-        $this->runTool('conversation.add_note', ['body' => 'noted']);
+        $this->runTool('conversation_add_note', ['body' => 'noted']);
 
         $changes = $this->collector()->snapshot();
         $row = $this->polycastRows()->first();
@@ -389,7 +389,7 @@ class ConversationChangesTest extends AiChatPanelTestCase
         $this->actingAs($this->agent);
         $this->collector()->arm($this->conversation->id);
 
-        $this->runTool('conversation.set_status', ['status' => 'closed']);
+        $this->runTool('conversation_set_status', ['status' => 'closed']);
 
         $mailbox_rows = \DB::table('polycast_events')
             ->where('event', 'App\Events\RealtimeMailboxNewThread')
@@ -408,7 +408,7 @@ class ConversationChangesTest extends AiChatPanelTestCase
         $this->actingAs($this->agent);
         $this->collector()->arm($this->conversation->id);
 
-        $this->runTool('conversation.create_draft_reply', ['body' => 'Sorry for the delay.']);
+        $this->runTool('conversation_create_draft_reply', ['body' => 'Sorry for the delay.']);
 
         $draft = Thread::where('conversation_id', $this->conversation->id)
             ->where('state', Thread::STATE_DRAFT)
@@ -434,7 +434,7 @@ class ConversationChangesTest extends AiChatPanelTestCase
         $this->actingAs($this->agent);
         $this->collector()->arm($this->conversation->id);
 
-        $this->runTool('conversation.create_draft_reply', ['body' => 'Sorry for the delay.']);
+        $this->runTool('conversation_create_draft_reply', ['body' => 'Sorry for the delay.']);
 
         $draft = Thread::where('conversation_id', $this->conversation->id)
             ->where('state', Thread::STATE_DRAFT)
@@ -463,13 +463,13 @@ class ConversationChangesTest extends AiChatPanelTestCase
         $this->collector()->arm($this->conversation->id);
 
         $this->setSettings([
-            'write_tools_autorun' => ['conversation.add_note'],
+            'write_tools_autorun' => ['conversation_add_note'],
         ]);
 
         $events = [];
 
         $client = (new FakeLlmClient())
-            ->queueToolCall('conversation.add_note', ['body' => 'noted'])
+            ->queueToolCall('conversation_add_note', ['body' => 'noted'])
             ->queueText('Done.');
 
         $context = $this->context();
@@ -530,7 +530,7 @@ class ConversationChangesTest extends AiChatPanelTestCase
      */
     public function testConfirmingAWriteReturnsTheChangeSetOnTheStreamHandshake()
     {
-        $chat = $this->chatAwaitingWrite('conversation.create_draft_reply', ['body' => 'Sorry for the delay.']);
+        $chat = $this->chatAwaitingWrite('conversation_create_draft_reply', ['body' => 'Sorry for the delay.']);
 
         $response = $this->actingAs($this->agent)->csrfPost('/aichatpanel/chat/confirm', [
             'conversation_id' => $this->conversation->id,
@@ -556,7 +556,7 @@ class ConversationChangesTest extends AiChatPanelTestCase
 
     public function testRejectingAWriteReturnsNoChanges()
     {
-        $this->chatAwaitingWrite('conversation.create_draft_reply', ['body' => 'Sorry for the delay.']);
+        $this->chatAwaitingWrite('conversation_create_draft_reply', ['body' => 'Sorry for the delay.']);
 
         $response = $this->actingAs($this->agent)->csrfPost('/aichatpanel/chat/confirm', [
             'conversation_id' => $this->conversation->id,

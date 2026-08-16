@@ -84,7 +84,7 @@ class HistoryWindowTest extends AiChatPanelTestCase
 
         for ($i = 1; $i <= 8; $i++) {
             $history[] = $this->user('Look up conversation '.$i.'. '.str_repeat('padding ', 30));
-            $history[] = $this->assistantCall('call-'.$i, 'conversation.get', '{"id":'.$i.'}');
+            $history[] = $this->assistantCall('call-'.$i, 'conversation_get', '{"id":'.$i.'}');
             $history[] = $this->tool('call-'.$i, 'Conversation '.$i.'. '.str_repeat('result body ', 60));
             $history[] = $this->assistant('That one is about a refund. '.str_repeat('padding ', 30));
         }
@@ -106,7 +106,7 @@ class HistoryWindowTest extends AiChatPanelTestCase
             $this->user('Old chatter. '.str_repeat('padding ', 100)),
             $this->assistant('Old answer. '.str_repeat('padding ', 100)),
             $this->user('Add a note saying we called them.'),
-            $this->assistantCall('write-1', 'conversation.add_note', '{"body":"We called them."}'),
+            $this->assistantCall('write-1', 'conversation_add_note', '{"body":"We called them."}'),
             $this->tool('write-1', 'Note added.'),
         ];
 
@@ -124,7 +124,7 @@ class HistoryWindowTest extends AiChatPanelTestCase
     {
         $history = [
             $this->user('First question.'),
-            $this->assistantCall('call-1', 'customer.get', '{}'),
+            $this->assistantCall('call-1', 'customer_get', '{}'),
             $this->tool('call-1', str_repeat('an extremely long tool result ', 120)),
             $this->assistant('The customer is on the pro plan.'),
             $this->user('Thanks, now draft a reply.'),
@@ -156,7 +156,7 @@ class HistoryWindowTest extends AiChatPanelTestCase
 
         $history = [
             $this->user('Keep this one.'),
-            $this->assistantCall('call-1', 'conversation.update_draft', $arguments),
+            $this->assistantCall('call-1', 'conversation_update_draft', $arguments),
             $this->tool('call-1', 'Draft updated.'),
             $this->user('And now the last question.'),
         ];
@@ -179,7 +179,7 @@ class HistoryWindowTest extends AiChatPanelTestCase
         $this->assertGreaterThan(0, $window['dropped']);
 
         $this->assertStringContainsString('Always answer in German', $window['rollup']);
-        $this->assertStringContainsString('customer.get', $window['rollup']);
+        $this->assertStringContainsString('customer_get', $window['rollup']);
         $this->assertStringContainsString('out of date', $window['rollup']);
     }
 
@@ -191,7 +191,7 @@ class HistoryWindowTest extends AiChatPanelTestCase
         $window = (new HistoryWindow(150))->apply($this->historyWorthSummarising());
 
         $this->assertStringContainsString('Always answer in German', $window['rollup']);
-        $this->assertStringNotContainsString('customer.get', $window['rollup']);
+        $this->assertStringNotContainsString('customer_get', $window['rollup']);
     }
 
     /**
@@ -204,7 +204,7 @@ class HistoryWindowTest extends AiChatPanelTestCase
     {
         return [
             $this->user('Always answer in German and keep it formal.'),
-            $this->assistantCall('call-1', 'customer.get', '{}'),
+            $this->assistantCall('call-1', 'customer_get', '{}'),
             $this->tool('call-1', str_repeat('customer profile data ', 100)),
             $this->assistant('Understood. '.str_repeat('padding ', 100)),
             $this->user('Now draft the reply.'),

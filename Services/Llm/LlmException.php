@@ -30,6 +30,9 @@ class LlmException extends \Exception
     /** @var string */
     protected $body_excerpt = '';
 
+    /** @var string */
+    protected $api_message = '';
+
     /**
      * @param string $type
      * @param string $message
@@ -73,6 +76,80 @@ class LlmException extends \Exception
     }
 
     /**
+     * What the endpoint itself said went wrong, short enough to put in front of
+     * an agent.
+     *
+     * Worth the trouble because the alternative is a bare status code: an
+     * OpenRouter 400 says exactly which parameter it rejected and why, and
+     * without it a misconfiguration is indistinguishable from a broken model.
+     *
+     * @return string
+     */
+    public function apiMessage()
+    {
+        return $this->api_message;
+    }
+
+    /**
+     * @param string $api_message
+     *
+     * @return $this
+     */
+    public function setApiMessage($api_message)
+    {
+        $this->api_message = (string) $api_message;
+
+        return $this;
+    }
+
+    /**
+     * Pull the human-readable part out of an error body.
+     *
+     * Every OpenAI-compatible endpoint nests it differently — OpenRouter and
+     * OpenAI use {"error": {"message": ...}}, llama.cpp sometimes answers with a
+     * bare {"message": ...}, and a proxy in front of either may return HTML.
+     * Anything that is not JSON falls back to the trimmed body.
+     *
+     * @param string $body
+     * @param int    $length
+     *
+     * @return string
+     */
+    public static function apiMessageFrom($body, $length = 300)
+    {
+        $decoded = json_decode((string) $body, true);
+        $message = '';
+
+        if (is_array($decoded)) {
+            if (isset($decoded['error']['message']) && is_scalar($decoded['error']['message'])) {
+                $message = (string) $decoded['error']['message'];
+            } elseif (isset($decoded['error']) && is_string($decoded['error'])) {
+                $message = $decoded['error'];
+            } elseif (isset($decoded['message']) && is_scalar($decoded['message'])) {
+                $message = (string) $decoded['message'];
+            }
+        }
+
+        if ($message === '') {
+            // Not JSON, or JSON in a shape nobody documented. The raw body is
+            // still more use than nothing, as long as it is not a whole page.
+            $message = (string) $body;
+
+            if (stripos($message, '<html') !== false) {
+                return '';
+            }
+        }
+
+        $message = trim(preg_replace('/\s+/u', ' ', $message));
+
+        if (mb_strlen($message) <= $length) {
+            return $message;
+        }
+
+        return mb_substr($message, 0, $length).'…';
+    }
+
+    /**
      * A distinct, actionable, translated message for the panel.
      *
      * @return string
@@ -106,8 +183,22 @@ class LlmException extends \Exception
 
             case self::TYPE_HTTP:
             default:
+                // The endpoint's own wording, when there is one. A bare status
+                // code is not something an agent can act on, and it is not
+                // something an administrator can debug from a screenshot either.
+                if ($this->status_code && $this->api_message !== '') {
+                    return __('The AI endpoint returned an error (:code): :message', [
+                        'code'    => $this->status_code,
+                        'message' => $this->api_message,
+                    ]);
+                }
+
                 if ($this->status_code) {
                     return __('The AI endpoint returned an error (:code).', ['code' => $this->status_code]);
+                }
+
+                if ($this->api_message !== '') {
+                    return __('The AI endpoint returned an error: :message', ['message' => $this->api_message]);
                 }
 
                 return __('The AI endpoint returned an error.');
@@ -132,9 +223,14 @@ class LlmException extends \Exception
         $excerpt = self::excerpt($body);
         $haystack = mb_strtolower($body);
 
+        // Decoded from the full body, not the excerpt: truncating at 600 bytes
+        // usually leaves invalid JSON behind.
+        $api_message = self::apiMessageFrom($body);
+
         if ($status == 401 || $status == 403 || strpos($haystack, 'authentication_error') !== false
             || strpos($haystack, 'invalid api key') !== false) {
-            return new static(self::TYPE_AUTH, 'Endpoint rejected the API key (HTTP '.$status.')', $status, $excerpt);
+            return (new static(self::TYPE_AUTH, 'Endpoint rejected the API key (HTTP '.$status.')', $status, $excerpt))
+                ->setApiMessage($api_message);
         }
 
         if (strpos($haystack, 'context length') !== false
@@ -142,24 +238,28 @@ class LlmException extends \Exception
             || strpos($haystack, 'maximum context') !== false
             || strpos($haystack, 'too many tokens') !== false
             || strpos($haystack, 'exceeds the available context') !== false) {
-            return new static(self::TYPE_CONTEXT_LENGTH, 'Context length exceeded (HTTP '.$status.')', $status, $excerpt);
+            return (new static(self::TYPE_CONTEXT_LENGTH, 'Context length exceeded (HTTP '.$status.')', $status, $excerpt))
+                ->setApiMessage($api_message);
         }
 
         if ($status == 404
             || strpos($haystack, 'model_not_found') !== false
             || strpos($haystack, 'does not exist') !== false
             || strpos($haystack, 'unknown model') !== false) {
-            return new static(self::TYPE_MODEL_NOT_FOUND, 'Model not found (HTTP '.$status.')', $status, $excerpt);
+            return (new static(self::TYPE_MODEL_NOT_FOUND, 'Model not found (HTTP '.$status.')', $status, $excerpt))
+                ->setApiMessage($api_message);
         }
 
         if (strpos($haystack, 'tool') !== false
             && (strpos($haystack, 'not supported') !== false
                 || strpos($haystack, 'unsupported') !== false
                 || strpos($haystack, 'does not support') !== false)) {
-            return new static(self::TYPE_TOOLS_UNSUPPORTED, 'Endpoint rejected the tools parameter (HTTP '.$status.')', $status, $excerpt);
+            return (new static(self::TYPE_TOOLS_UNSUPPORTED, 'Endpoint rejected the tools parameter (HTTP '.$status.')', $status, $excerpt))
+                ->setApiMessage($api_message);
         }
 
-        return new static(self::TYPE_HTTP, 'Endpoint returned HTTP '.$status, $status, $excerpt);
+        return (new static(self::TYPE_HTTP, 'Endpoint returned HTTP '.$status, $status, $excerpt))
+            ->setApiMessage($api_message);
     }
 
     /**

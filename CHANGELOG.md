@@ -3,6 +3,13 @@
 Newest first. No release so far has required a migration, removed a setting or
 changed an endpoint.
 
+## 1.3.0
+
+* Fix - Tool calling works against OpenRouter, OpenAI and Anthropic. The builtin tools were named with a dot (`conversation.get`), which OpenAI and Anthropic reject outright, so every message sent with tools enabled came back as "The AI endpoint returned an error (400)". The tools are now named `conversation_get`, `customer_get` and so on, and any tool name a module registers is sanitised before it goes on the wire. Settings that name the old spelling keep working.
+* Fix - An endpoint error says what the endpoint actually complained about instead of only its status code, in the panel and in the log. A 400 was previously impossible to diagnose without turning on prompt logging, which logs customer data.
+* New - The model picker shows readable names grouped by vendor and sorted, rather than several hundred raw model ids in whatever order the endpoint listed them. Models that cannot do tool calling are marked.
+* Change - "Load from endpoint" writes the allowed-models list in alphabetical order.
+
 ## 1.2.3
 
 * Fix - The assistant no longer says it has looked at a photo or a document. Attachments reach it as a filename and a type only, and it was reading the filename as if it had seen the file.

@@ -65,6 +65,28 @@ class CurlLlmClient implements LlmClient
      */
     public function models()
     {
+        $ids = [];
+
+        foreach ($this->catalogue() as $entry) {
+            $ids[] = $entry['id'];
+        }
+
+        return $ids;
+    }
+
+    /**
+     * Everything /v1/models says about each model, normalised.
+     *
+     * Deliberately not on the LlmClient interface: it is only ever called on a
+     * concrete client, and adding it would force every implementation to carry
+     * a method that has nothing to do with completing a chat.
+     *
+     * @return array List of ['id' => .., 'label' => .., 'group' => .., 'tools' => bool|null]
+     *
+     * @throws LlmException
+     */
+    public function catalogue()
+    {
         list($status, $body) = $this->request('GET', '/v1/models');
 
         // Not every endpoint implements /v1/models. That is not an error — the
@@ -90,18 +112,104 @@ class CurlLlmClient implements LlmClient
 
         // The standard shape is {"data": [{"id": "..."}]}. Some servers add
         // their own keys alongside it (llama.cpp emits a "models" array too);
-        // data[].id is the only field to trust.
-        $models = [];
+        // data[].id is the only field that is always there.
+        $catalogue = [];
+        $seen = [];
 
         if (!empty($decoded['data']) && is_array($decoded['data'])) {
             foreach ($decoded['data'] as $entry) {
-                if (!empty($entry['id']) && is_scalar($entry['id'])) {
-                    $models[] = (string) $entry['id'];
+                if (empty($entry['id']) || !is_scalar($entry['id'])) {
+                    continue;
                 }
+
+                $id = (string) $entry['id'];
+
+                if (isset($seen[$id])) {
+                    continue;
+                }
+
+                $seen[$id] = true;
+                $catalogue[] = self::describeModel($id, is_array($entry) ? $entry : []);
             }
         }
 
-        return array_values(array_unique($models));
+        return $catalogue;
+    }
+
+    /**
+     * One catalogue entry.
+     *
+     * A bare id is unreadable at a glance and there can be hundreds of them:
+     * OpenRouter alone lists ~500, named "anthropic/claude-sonnet-4.5" while
+     * carrying "Anthropic: Claude Sonnet 4.5" in a field nobody was reading.
+     * The "Vendor: Model" split is OpenRouter's convention; endpoints that only
+     * give an id fall back to the vendor path segment, and endpoints that give
+     * neither end up ungrouped, which is correct for a single-model llama.cpp.
+     *
+     * @param string $id
+     * @param array  $entry
+     *
+     * @return array
+     */
+    public static function describeModel($id, array $entry = [])
+    {
+        $name = isset($entry['name']) && is_scalar($entry['name']) ? trim((string) $entry['name']) : '';
+
+        $group = '';
+        $label = $name !== '' ? $name : $id;
+
+        if ($name !== '' && strpos($name, ': ') !== false) {
+            list($group, $label) = explode(': ', $name, 2);
+            $group = trim($group);
+            $label = trim($label);
+        } elseif (strpos($id, '/') !== false) {
+            list($vendor) = explode('/', $id, 2);
+            $group = self::vendorLabel($vendor);
+        }
+
+        return [
+            'id'    => $id,
+            'label' => $label !== '' ? $label : $id,
+            'group' => $group,
+            'tools' => self::supportsTools($entry),
+        ];
+    }
+
+    /**
+     * Whether the model can do tool calling: true, false, or null for "the
+     * endpoint did not say".
+     *
+     * The distinction matters. llama.cpp and vLLM do not report
+     * supported_parameters at all, and marking their models as tool-less would
+     * turn tools off for the endpoints that started this module.
+     *
+     * @param array $entry
+     *
+     * @return bool|null
+     */
+    protected static function supportsTools(array $entry)
+    {
+        if (empty($entry['supported_parameters']) || !is_array($entry['supported_parameters'])) {
+            return null;
+        }
+
+        return in_array('tools', $entry['supported_parameters'], true);
+    }
+
+    /**
+     * @param string $vendor
+     *
+     * @return string
+     */
+    protected static function vendorLabel($vendor)
+    {
+        $vendor = trim(str_replace(['-', '_'], ' ', (string) $vendor));
+
+        if ($vendor === '') {
+            return '';
+        }
+
+        return mb_convert_case($vendor, MB_CASE_TITLE, 'UTF-8');
     }
 
     /**

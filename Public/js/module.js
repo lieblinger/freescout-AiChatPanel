@@ -1512,10 +1512,14 @@
      */
     function fillModels(models, current) {
         var $select = panel.$el.find('.aicp-model');
+        var groups = {};
+        var found = false;
 
         $select.empty();
 
-        if (!models || !models.length) {
+        models = $.grep($.map(models || [], normaliseModel), Boolean);
+
+        if (!models.length) {
             if (current) {
                 $select.append($('<option>').val(current).text(current));
             }
@@ -1524,15 +1528,66 @@
             return;
         }
 
+        // Already sorted server-side, vendor first; reordering here would undo
+        // that. Grouping is what turns OpenRouter's ~500 entries into a list
+        // somebody can actually find a model in.
         $.each(models, function (i, model) {
-            $select.append($('<option>').val(model).text(model));
+            var $option = $('<option>')
+                .val(model.id)
+                .attr('title', model.id)
+                .text(model.tools === false
+                    ? model.label + ' ' + t('model_no_tools', '(no tools)')
+                    : model.label);
+
+            if (model.id === current) {
+                found = true;
+            }
+
+            if (!model.group) {
+                $select.append($option);
+                return;
+            }
+
+            if (!groups[model.group]) {
+                groups[model.group] = $('<optgroup>').attr('label', model.group).appendTo($select);
+            }
+
+            $option.appendTo(groups[model.group]);
         });
 
         if (current) {
+            // The catalogue is cached for a few minutes, so a model saved as a
+            // preference can be missing from it. Dropping it would silently
+            // switch the agent to whatever sorts first.
+            if (!found) {
+                $select.append($('<option>').val(current).text(current).attr('title', current));
+            }
+
             $select.val(current);
         }
 
         $select.toggleClass('hidden', models.length < 2);
+    }
+
+    /**
+     * Accept both the plain id list older panels sent and the described entries
+     * the server sends now.
+     */
+    function normaliseModel(model) {
+        if (typeof model === 'string') {
+            return {id: model, label: model, group: '', tools: null};
+        }
+
+        if (!model || !model.id) {
+            return null;
+        }
+
+        return {
+            id: model.id,
+            label: model.label || model.id,
+            group: model.group || '',
+            tools: typeof model.tools === 'boolean' ? model.tools : null
+        };
     }
 
     function showNotices(notices) {

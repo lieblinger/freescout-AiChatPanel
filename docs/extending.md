@@ -59,7 +59,7 @@ interface will not break your module.
 
 | Method | Returns | Notes |
 |---|---|---|
-| `name()` | `string` | Namespaced and stable, e.g. `crm.get_contact`. Must match `^[a-zA-Z0-9_.-]{1,64}$`. Renaming resets the admin's settings. |
+| `name()` | `string` | Namespaced and stable, e.g. `crm_get_contact`. Must match `^[a-zA-Z0-9_.-]{1,64}$`. Renaming resets the admin's settings. |
 | `description()` | `string` | For the model. **English, not translated.** |
 | `parameters()` | `array` | JSON Schema, object type. |
 | `mode()` | `'read'` or `'write'` | Default `read`. |
@@ -67,6 +67,14 @@ interface will not break your module.
 | `isRelevant(PanelContext $c)` | `bool` | Default `true`. Return `false` to keep it out of the payload. |
 | `confirmationLabel(array $args, PanelContext $c)` | `string` | Translated. Write tools only. |
 | `handle(array $args, PanelContext $c)` | `ToolResult` | Arguments are already validated. |
+
+> **Separate the words in `name()` with `_`, not `.`.** OpenAI and Anthropic both
+> require `^[a-zA-Z0-9_-]{1,64}$` for a function name and reject the *whole*
+> request when a single tool breaks it, so one dotted name fails every completion
+> routed to them — through OpenRouter, for instance. The registry sanitises any
+> other character to `_` before the definitions go on the wire, so a dotted tool
+> still works; it is just offered to the model under a name that is not the one
+> you wrote.
 
 ### A read tool
 
@@ -83,7 +91,7 @@ class GetContactTool extends AbstractTool
 {
     public function name()
     {
-        return 'crm.get_contact';
+        return 'crm_get_contact';
     }
 
     public function description()
@@ -163,7 +171,7 @@ class AddCrmNoteTool extends AbstractTool
 {
     public function name()
     {
-        return 'crm.add_note';
+        return 'crm_add_note';
     }
 
     public function description()

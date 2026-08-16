@@ -27,7 +27,7 @@ class ListCustomerConversationsTool extends AbstractTool
      */
     public function name()
     {
-        return 'conversation.list_customer_conversations';
+        return 'conversation_list_customer_conversations';
     }
 
     /**
@@ -38,7 +38,7 @@ class ListCustomerConversationsTool extends AbstractTool
         return 'List other conversations belonging to the customer of the current conversation. '
             .'Use this to find out whether the customer has contacted support before, or to locate '
             .'a previous ticket the customer refers to. Returns conversation numbers, subjects, '
-            .'statuses and dates, but not message bodies — call conversation.get for those.';
+            .'statuses and dates, but not message bodies — call conversation_get for those.';
     }
 
     /**

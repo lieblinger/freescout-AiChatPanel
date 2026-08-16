@@ -33,7 +33,7 @@ class WriteConfirmationTest extends AiChatPanelTestCase
         }, 20, 2);
 
         $this->setSettings([
-            'tools_enabled' => ['test.echo', 'test.write', 'conversation.add_note'],
+            'tools_enabled' => ['test.echo', 'test.write', 'conversation_add_note'],
         ]);
     }
 
@@ -157,7 +157,7 @@ class WriteConfirmationTest extends AiChatPanelTestCase
      *
      * @return Chat
      */
-    protected function chatAwaitingWrite($tool = 'conversation.add_note', array $arguments = ['body' => 'from the model'])
+    protected function chatAwaitingWrite($tool = 'conversation_add_note', array $arguments = ['body' => 'from the model'])
     {
         $chat = Chat::findOrCreateFor($this->conversation->id, $this->agent->id);
 
@@ -194,7 +194,7 @@ class WriteConfirmationTest extends AiChatPanelTestCase
         $pending = $response->json()['pending'];
 
         $this->assertNotNull($pending);
-        $this->assertEquals('conversation.add_note', $pending['tool']);
+        $this->assertEquals('conversation_add_note', $pending['tool']);
         $this->assertEquals('from the model', $pending['arguments']['body']);
         $this->assertNotEmpty($pending['label']);
     }
@@ -229,7 +229,7 @@ class WriteConfirmationTest extends AiChatPanelTestCase
 
         $this->assertEquals($before, $after, 'A rejected write must not touch the conversation.');
 
-        $audit = ToolCall::where('tool', 'conversation.add_note')->first();
+        $audit = ToolCall::where('tool', 'conversation_add_note')->first();
         $this->assertNotNull($audit);
         $this->assertEquals(ToolCall::STATUS_REJECTED, $audit->status);
 
@@ -241,7 +241,7 @@ class WriteConfirmationTest extends AiChatPanelTestCase
 
     public function testApprovingAWriteExecutesItWithTheStoredArguments()
     {
-        $this->chatAwaitingWrite('conversation.add_note', ['body' => 'the approved note']);
+        $this->chatAwaitingWrite('conversation_add_note', ['body' => 'the approved note']);
 
         $this->actingAs($this->agent)->csrfPost('/aichatpanel/chat/confirm', [
             'conversation_id' => $this->conversation->id,
@@ -262,7 +262,7 @@ class WriteConfirmationTest extends AiChatPanelTestCase
         $this->assertStringNotContainsString('something else entirely', $note->body);
         $this->assertEquals($this->agent->id, $note->created_by_user_id, 'The write runs as the acting user.');
 
-        $audit = ToolCall::where('tool', 'conversation.add_note')->first();
+        $audit = ToolCall::where('tool', 'conversation_add_note')->first();
         $this->assertEquals(ToolCall::STATUS_OK, $audit->status);
     }
 

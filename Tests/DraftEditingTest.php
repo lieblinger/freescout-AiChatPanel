@@ -24,9 +24,9 @@ class DraftEditingTest extends AiChatPanelTestCase
 
         $this->setSettings([
             'tools_enabled' => [
-                'conversation.get_drafts',
-                'conversation.update_draft',
-                'conversation.create_draft_reply',
+                'conversation_get_drafts',
+                'conversation_update_draft',
+                'conversation_create_draft_reply',
             ],
         ]);
     }
@@ -78,7 +78,7 @@ class DraftEditingTest extends AiChatPanelTestCase
     protected function update(array $arguments, $user = null)
     {
         return $this->registry($user)->execute(
-            'conversation.update_draft',
+            'conversation_update_draft',
             \Helper::jsonEncodeSafe($arguments),
             ['confirmed' => true]
         );
@@ -92,7 +92,7 @@ class DraftEditingTest extends AiChatPanelTestCase
     protected function getDrafts(array $arguments = [], $user = null)
     {
         return $this->registry($user)->execute(
-            'conversation.get_drafts',
+            'conversation_get_drafts',
             \Helper::jsonEncodeSafe($arguments)
         );
     }
@@ -264,14 +264,14 @@ class DraftEditingTest extends AiChatPanelTestCase
         $this->addDraft('A draft.');
 
         // Even when an admin explicitly lists it as auto-runnable.
-        $this->setSettings(['write_tools_autorun' => ['conversation.update_draft']]);
+        $this->setSettings(['write_tools_autorun' => ['conversation_update_draft']]);
 
         $registry = $this->registry();
-        $tool = $registry->find('conversation.update_draft');
+        $tool = $registry->find('conversation_update_draft');
 
         $this->assertNotNull($tool);
         $this->assertFalse($registry->mayAutoRun($tool));
-        $this->assertContains('conversation.update_draft', ToolRegistry::neverAutoRun());
+        $this->assertContains('conversation_update_draft', ToolRegistry::neverAutoRun());
     }
 
     public function testItIsNotOfferedWhenThereIsNoDraft()
@@ -281,7 +281,7 @@ class DraftEditingTest extends AiChatPanelTestCase
             'name'
         );
 
-        $this->assertNotContains('conversation.update_draft', $names, 'Nothing to update, so the tool should stay out of the payload.');
+        $this->assertNotContains('conversation_update_draft', $names, 'Nothing to update, so the tool should stay out of the payload.');
 
         $this->addDraft('Now there is one.');
 
@@ -290,7 +290,7 @@ class DraftEditingTest extends AiChatPanelTestCase
             'name'
         );
 
-        $this->assertContains('conversation.update_draft', $names);
+        $this->assertContains('conversation_update_draft', $names);
     }
 
     // -- Reading ------------------------------------------------------------
@@ -362,13 +362,13 @@ class DraftEditingTest extends AiChatPanelTestCase
         $existing = $this->addDraft('The draft that is already there.');
 
         $result = $this->registry()->execute(
-            'conversation.create_draft_reply',
+            'conversation_create_draft_reply',
             \Helper::jsonEncodeSafe(['body' => 'A rival draft.']),
             ['confirmed' => true]
         );
 
         $this->assertFalse($result->ok);
-        $this->assertStringContainsString('conversation.update_draft', $result->error);
+        $this->assertStringContainsString('conversation_update_draft', $result->error);
         $this->assertStringContainsString((string) $existing->id, $result->error);
 
         $this->assertEquals(1, $this->conversation->threads()->where('state', Thread::STATE_DRAFT)->count());
@@ -384,7 +384,7 @@ class DraftEditingTest extends AiChatPanelTestCase
 
         $this->assertStringContainsString('Unsent drafts: 1', $content);
         $this->assertStringContainsString('thread '.$draft->id, $content);
-        $this->assertStringContainsString('conversation.get_drafts', $content);
+        $this->assertStringContainsString('conversation_get_drafts', $content);
 
         // Existence, not content: the body stays behind the tool.
         $this->assertStringNotContainsString('A very distinctive sentence', $content);
@@ -406,7 +406,7 @@ class DraftEditingTest extends AiChatPanelTestCase
         $content = (new ContextBuilder($this->context()))->build()['content'];
 
         $this->assertStringContainsString('Unsent drafts: none.', $content);
-        $this->assertStringContainsString('conversation.create_draft_reply', $content);
+        $this->assertStringContainsString('conversation_create_draft_reply', $content);
     }
 
     /**

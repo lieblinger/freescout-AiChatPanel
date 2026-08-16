@@ -453,7 +453,22 @@ class AgentLoop
      */
     protected function fail(AgentOutcome $outcome, LlmException $e, $started)
     {
-        \Helper::logException($e, '[AiChatPanel] Completion failed ('.$e->getType().'): ');
+        // The body excerpt goes in the log line and not just on the exception:
+        // without it a 400 is unreadable after the fact, and turning on
+        // log_prompts to find out is not an option — that logs customer data.
+        $prefix = '[AiChatPanel] Completion failed ('.$e->getType();
+
+        if ($e->getStatusCode()) {
+            $prefix .= ', HTTP '.$e->getStatusCode();
+        }
+
+        $prefix .= ')';
+
+        if ($e->getBodyExcerpt()) {
+            $prefix .= ' '.$e->getBodyExcerpt();
+        }
+
+        \Helper::logException($e, $prefix.': ');
 
         $outcome->status = AgentOutcome::STATUS_ERROR;
         $outcome->error = $e->userMessage();

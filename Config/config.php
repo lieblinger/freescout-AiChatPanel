@@ -71,10 +71,10 @@ return [
 
         // -- Tools ---------------------------------------------------------
         'tools_enabled'       => ['default' => [
-            'conversation.list_customer_conversations',
-            'conversation.get',
-            'conversation.get_drafts',
-            'customer.get',
+            'conversation_list_customer_conversations',
+            'conversation_get',
+            'conversation_get_drafts',
+            'customer_get',
         ]],
         'write_tools_enabled' => ['default' => false],
         // Individually named write tools allowed to run without confirmation.

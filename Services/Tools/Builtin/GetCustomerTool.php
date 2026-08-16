@@ -21,7 +21,7 @@ class GetCustomerTool extends AbstractTool
      */
     public function name()
     {
-        return 'customer.get';
+        return 'customer_get';
     }
 
     /**

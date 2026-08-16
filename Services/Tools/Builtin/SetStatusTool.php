@@ -24,7 +24,7 @@ class SetStatusTool extends AbstractTool
      */
     public function name()
     {
-        return 'conversation.set_status';
+        return 'conversation_set_status';
     }
 
     /**

@@ -56,6 +56,7 @@ class JsStrings
             'thinking'           => __('Thinking…'),
             'running_tool'       => __('Running :tool…'),
             'tools_unsupported'  => __('The selected model cannot use tools, so they are disabled.'),
+            'model_no_tools'     => __('(no tools)'),
             'show_reasoning'     => __('Show reasoning'),
             'reasoning_only'     => __('The model put its whole answer into its reasoning and returned nothing. Open “Show reasoning” to read it, or ask again.'),
             'answer_truncated'   => __('The model used its whole response budget before writing an answer. Raise “Max response tokens” in the settings, then ask again.'),

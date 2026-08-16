@@ -22,8 +22,8 @@ it", which is honest.
 ### Anything that contacts a customer
 
 There is no auto-reply, no background answering, no "send" button anywhere in
-the panel, and no queue job that could produce one. `conversation.create_draft_reply`
-saves a draft thread and stops; `conversation.update_draft` rewrites one and
+the panel, and no queue job that could produce one. `conversation_create_draft_reply`
+saves a draft thread and stops; `conversation_update_draft` rewrites one and
 stops. This is a product boundary, not a missing feature.
 
 The same boundary is why editing is limited to **drafts**. A sent reply and a
@@ -36,15 +36,15 @@ and the Discard button sits next to every draft already.
 ### A "trust all write tools" switch
 
 Individually named write tools can be exempted from confirmation. There is
-deliberately no global switch, and neither `conversation.create_draft_reply` nor
-`conversation.update_draft` can be exempted at all — writing customer-facing text
+deliberately no global switch, and neither `conversation_create_draft_reply` nor
+`conversation_update_draft` can be exempted at all — writing customer-facing text
 unattended and silently overwriting it unattended are the same risk from two
 directions. A single checkbox that turns off every confirmation is the kind of
 thing that gets ticked once during a demo and never unticked.
 
 ### Cross-conversation and cross-mailbox search
 
-`conversation.get` and `conversation.list_customer_conversations` are scoped to
+`conversation_get` and `conversation_list_customer_conversations` are scoped to
 the customer of the open conversation and to mailboxes the user can already see.
 There is no "search all conversations" tool. That would turn the panel into an
 unaudited full-text search over the helpdesk that happens to ignore how carefully
@@ -110,7 +110,7 @@ point in `ContextBuilder`.
 ### 4. A tool-call approval policy per user or role
 
 Currently confirmation is global-plus-per-tool. A supervisor might reasonably
-want senior agents to skip confirmation for `conversation.set_status` while
+want senior agents to skip confirmation for `conversation_set_status` while
 juniors do not. The registry already re-checks authorisation at execution time,
 so this is a policy layer on top rather than surgery.
 
