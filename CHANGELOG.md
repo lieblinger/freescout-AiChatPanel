@@ -1,7 +1,14 @@
 # Changelog
 
-Newest first. No release so far has required a migration, removed a setting or
-changed an endpoint.
+Newest first. No release so far has removed a setting or changed an endpoint.
+1.3.1 is the first to require a migration; it rewrites stored chat history and
+runs with the module's other migrations.
+
+## 1.3.1
+
+* Fix - A chat that was started before 1.3.0 works again. Its stored turns still named the tools the way they were spelled then, that history is replayed to the model on every later message, and the model copied the old spelling back — so a request to save a draft reply came back as `Unknown tool "conversation.create_draft_reply"`. The stored names are renamed on upgrade, and the old spelling is accepted from the model in any case.
+* Fix - The tool list in the settings shows the tools that are actually on. An install upgraded from 1.2.x had them stored under their pre-1.3.0 names, so every box appeared unticked — and saving that page would have written the empty list back and turned the tools off. Per-mailbox tool lists are renamed as well.
+* Fix - The "Open in editor" link on a draft the assistant saved is back. It was matched against the tool's pre-1.3.0 name, so it never appeared.
 
 ## 1.3.0
 
