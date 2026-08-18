@@ -155,6 +155,8 @@ class AgentLoop
                 return $outcome;
             }
 
+            $this->renameToolCallsToWhatIsOffered($response);
+
             // The assistant turn that asked for the tools has to be replayed
             // verbatim, and every one of its calls needs an answer.
             $outcome->turns[] = $this->assistantTurn($response);
@@ -187,6 +189,34 @@ class AgentLoop
     // -----------------------------------------------------------------------
 
     /**
+     * Rewrite a turn's tool call names to the names those tools are offered
+     * under right now.
+     *
+     * This turn is replayed to the endpoint on the next request and stored for
+     * every request after that, so whatever it says is what the model reads back
+     * and imitates. A chat that predates the 1.3.0 rename holds the old dotted
+     * names, which is how the model came to ask for tools that no longer exist
+     * under those names; left alone it would keep asking for them forever.
+     *
+     * A name that resolves to nothing is left exactly as the model sent it, so
+     * the error it gets back names what it actually asked for.
+     *
+     * @param ChatResponse $response
+     *
+     * @return void
+     */
+    protected function renameToolCallsToWhatIsOffered(ChatResponse $response)
+    {
+        foreach ($response->tool_calls as $i => $call) {
+            $tool = $this->registry->find($call['name']);
+
+            if ($tool) {
+                $response->tool_calls[$i]['name'] = $this->registry->wireNameFor($tool);
+            }
+        }
+    }
+
+    /**
      * Execute the tool calls of one assistant turn.
      *
      * Reads run immediately. The first write stops the run. Any further writes
@@ -207,6 +237,14 @@ class AgentLoop
         foreach ($response->tool_calls as $call) {
             $tool = $this->registry->find($call['name']);
             $is_write = $tool && ToolRegistry::isWrite($tool);
+
+            // What is recorded, audited and shown is the tool's own name, not
+            // the name it is offered under: that is the name the settings screen
+            // lists, and the two differ whenever a name had to be sanitised.
+            // An unresolved name stays as asked for, so the error names it.
+            if ($tool) {
+                $call['name'] = $tool->name();
+            }
 
             if ($is_write && !$this->registry->mayAutoRun($tool)) {
                 if ($paused) {

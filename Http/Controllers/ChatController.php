@@ -925,7 +925,10 @@ class ChatController extends Controller
 
             return [
                 'tool_call_id' => $call['id'],
-                'tool'         => $call['name'],
+                // The tool's own name, not the one the model used: a pre-rename
+                // chat asks for the dotted spelling, and the confirmation this
+                // builds is audited and stored under it.
+                'tool'         => $tool->name(),
                 'arguments'    => $ok ? $arguments : [],
                 'label'        => $tool->confirmationLabel($ok ? $arguments : [], $context),
             ];

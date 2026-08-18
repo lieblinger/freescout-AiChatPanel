@@ -264,6 +264,12 @@ class ToolRegistry
      * Deliberately searches available() and not all(): a tool that is disabled
      * or not permitted must be indistinguishable from one that does not exist.
      *
+     * The old dotted names are accepted too. A chat that ran before the builtins
+     * were renamed still holds them in its stored tool_calls, and that history is
+     * replayed to the model verbatim, so the model reads its own past calls in
+     * the old spelling and asks for it again. Refusing that with "unknown tool"
+     * broke every pre-rename chat.
+     *
      * @param string $name
      *
      * @return Tool|null
@@ -272,19 +278,44 @@ class ToolRegistry
     {
         $available = $this->available();
 
-        if (isset($available[$name])) {
-            return $available[$name];
-        }
-
         // The model answers with the name it was given, which is the sanitised
         // one whenever a tool's own name is not wire-safe.
         $wire_names = $this->wireNames($available);
 
-        if (isset($wire_names[$name])) {
-            return $available[$wire_names[$name]];
+        foreach ([$name, self::canonicalName($name)] as $candidate) {
+            if (isset($available[$candidate])) {
+                return $available[$candidate];
+            }
+
+            if (isset($wire_names[$candidate])) {
+                return $available[$wire_names[$candidate]];
+            }
         }
 
         return null;
+    }
+
+    /**
+     * The name a tool is currently offered to the model under.
+     *
+     * Falls back to the sanitised name for a tool that is not in available(),
+     * which is the name it would be offered under if it were.
+     *
+     * @param Tool $tool
+     *
+     * @return string
+     */
+    public function wireNameFor(Tool $tool)
+    {
+        $name = $tool->name();
+
+        foreach ($this->wireNames($this->available()) as $wire => $internal) {
+            if ($internal === $name) {
+                return $wire;
+            }
+        }
+
+        return self::apiName($name);
     }
 
     /**

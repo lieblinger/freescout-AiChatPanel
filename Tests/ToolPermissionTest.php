@@ -134,6 +134,39 @@ class ToolPermissionTest extends AiChatPanelTestCase
         $this->assertContains('customer_get', $names);
     }
 
+    public function testAToolCalledByItsPreRenameNameStillResolves()
+    {
+        // A chat started before 1.3.0 replays its stored tool calls to the
+        // model, so the model reads the dotted spelling and asks for it again.
+        // Answering that with "unknown tool" broke every such chat.
+        $this->setSettings(['tools_enabled' => ['conversation_get']]);
+
+        $tool = $this->registry()->find('conversation.get');
+
+        $this->assertNotNull($tool, 'A pre-rename name must still resolve.');
+        $this->assertEquals('conversation_get', $tool->name());
+
+        $result = $this->registry()->execute(
+            'conversation.get',
+            \Helper::jsonEncodeSafe(['number' => $this->conversation->number])
+        );
+
+        $this->assertTrue($result->ok);
+    }
+
+    public function testAPreRenameNameDoesNotResolveWhenTheToolIsDisabled()
+    {
+        // The old spelling is a synonym, not a way round the settings.
+        $this->setSettings(['tools_enabled' => ['test.echo']]);
+
+        $this->assertNull($this->registry()->find('conversation.get'));
+
+        $result = $this->registry()->execute('conversation.create_draft_reply', '{"body":"x"}');
+
+        $this->assertFalse($result->ok);
+        $this->assertStringStartsWith('Unknown tool', $result->error);
+    }
+
     public function testAForbiddenToolIsRejectedWhenCalledAnyway()
     {
         // The model can name any tool it likes; the server decides.

@@ -390,6 +390,24 @@ class DraftEditingTest extends AiChatPanelTestCase
         $this->assertStringNotContainsString('A very distinctive sentence', $content);
     }
 
+    /**
+     * The "Open in editor" link the panel puts on a saved draft is gated on the
+     * tool name that produced it, and that name lives in two places. 1.3.0
+     * renamed the tool in PHP and left the JavaScript on the old spelling, so
+     * the link silently stopped appearing on every install.
+     */
+    public function testThePanelLinksTheDraftUnderTheToolsCurrentName()
+    {
+        $tool = new \Modules\AiChatPanel\Services\Tools\Builtin\CreateDraftReplyTool();
+        $js = file_get_contents(__DIR__.'/../Public/js/module.js');
+
+        $this->assertStringContainsString(
+            "'".$tool->name()."'",
+            $js,
+            'module.js does not know the draft tool by its current name, so it cannot offer to open the draft.'
+        );
+    }
+
     public function testDraftsStayOutOfTheConversationHistory()
     {
         $this->addThread('A published customer message.');

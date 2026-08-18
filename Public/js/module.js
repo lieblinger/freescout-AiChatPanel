@@ -1463,7 +1463,12 @@
      * wholesale (core/public/js/main.js:1647) and the agent may be typing.
      */
     function renderDraftAction(message, ok) {
-        if (!ok || message.tool_name !== 'conversation.create_draft_reply') {
+        // The dotted spelling is what the tool was called before 1.3.0. Rows
+        // written then are renamed by migration, but a panel left open across
+        // the upgrade still holds them.
+        var draftTools = ['conversation_create_draft_reply', 'conversation.create_draft_reply'];
+
+        if (!ok || draftTools.indexOf(message.tool_name) === -1) {
             return '';
         }
 

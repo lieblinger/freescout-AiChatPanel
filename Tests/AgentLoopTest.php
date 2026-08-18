@@ -107,6 +107,30 @@ class AgentLoopTest extends AiChatPanelTestCase
         $this->assertEquals(['system', 'user', 'assistant', 'tool'], $roles);
     }
 
+    public function testAPreRenameToolNameIsRecordedUnderItsCurrentName()
+    {
+        // A chat that predates 1.3.0 hands the model the dotted spelling, and
+        // the model asks for it again. It has to run, and what is stored has to
+        // be the name of the tool that ran — otherwise the next turn reads the
+        // dotted name back out of the history and the chat never recovers.
+        $this->setSettings(['tools_enabled' => ['conversation_get']]);
+
+        $client = (new FakeLlmClient())
+            ->queueToolCall('conversation.get', ['number' => $this->conversation->number])
+            ->queueText('Done.');
+
+        $outcome = $this->loop($client)->run($this->messages());
+
+        $this->assertEquals(AgentOutcome::STATUS_COMPLETE, $outcome->status);
+
+        $tool_turn = $outcome->turns[1];
+
+        $this->assertEquals(Message::ROLE_TOOL, $tool_turn['role']);
+        $this->assertEquals(Message::STATUS_OK, $tool_turn['status']);
+        $this->assertEquals('conversation_get', $tool_turn['tool_name']);
+        $this->assertStringNotContainsString('Unknown tool', $tool_turn['body']);
+    }
+
     public function testChainedToolCalls()
     {
         $client = (new FakeLlmClient())
