@@ -65,6 +65,10 @@ class JsStrings
             'day_today'          => __('Today'),
             'day_yesterday'      => __('Yesterday'),
 
+            // -- Panel shape ---------------------------------------------------
+            'dock'               => __('Dock'),
+            'undock'             => __('Undock'),
+
             // -- Message actions -----------------------------------------------
             'insert_reply'       => __('Insert into reply'),
             'insert_reply_short' => __('Reply'),

@@ -9,6 +9,8 @@ runs with the module's other migrations.
 * New - The assistant knows what day it is. The current date and time are in every request, so "how long has this been open", "has that date passed" and "reply that we will ship on Monday" no longer get answered from whatever the model's training data thought today was.
 * Fix - Every timestamp the assistant is shown is now in the agent's own timezone, the same one the conversation view uses. It was being given the raw stored value with no timezone stated, so on any install not running in UTC it reported message times that disagreed with the screen the agent was reading — and worked out elapsed times from them.
 * New - A `time_now` tool, off by default. It reports the clock plus the conversation's age and the time since the last message, worked out in PHP rather than by the model. Tick it in Settings » AI Chat Panel to switch it on; fresh installs have it on already.
+* New - The panel can leave its column. The pin button in its header undocks it into a window: smaller, dragged by the header, sized from any edge or corner, and floating over a conversation that gets its full width back. Pin it again and it is the column it was, at the width it had.
+* New - The shape, the window's position and its size are remembered per user, next to the open state and the width, so the window comes back where it was left — in any browser, not only the one it was moved in. A screen too small for it only caps what is drawn: the window is pulled fully back on screen there and the stored geometry survives, so the larger monitor gets it back unchanged. Below the drawer breakpoint there is no window at all — the panel is a drawer and the pin button is hidden.
 
 ## 1.3.1
 

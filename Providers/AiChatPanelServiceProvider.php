@@ -310,6 +310,13 @@ class AiChatPanelServiceProvider extends ServiceProvider
                     'prefs'        => [
                         'open'  => (bool) $prefs->panel_open,
                         'width' => (int) $prefs->panel_width,
+                        'mode'  => \Modules\AiChatPanel\Entities\UserPref::clampMode($prefs->panel_mode),
+                        // Null until the panel has been undocked once, which is
+                        // what tells module.js to seed a size and a corner.
+                        'float_x'      => $prefs->panel_float_x,
+                        'float_y'      => $prefs->panel_float_y,
+                        'float_width'  => $prefs->panel_float_width,
+                        'float_height' => $prefs->panel_float_height,
                     ],
                     // The panel decides Today/Yesterday itself, so it needs the
                     // same timezone the server formatted the messages in.

@@ -291,6 +291,12 @@
         // The stored panel_width preference. What the panel actually gets is
         // capped to the window — see applyWidth().
         pref_width: 380,
+        // The stored panel_mode preference: docked column or floating window.
+        // Like pref_open, only the wide layout acts on it — see isFloating().
+        pref_mode: 1,
+        // The floating window's box, {x, y, w, h}. Null until the panel has
+        // been undocked once, which is seedFloat()'s cue.
+        float: null,
         loaded: false,
         busy: false,
         request: null,
@@ -331,8 +337,14 @@
             prefs: $el.attr('data-url-prefs')
         };
 
+        panel.pref_mode = parseInt($el.attr('data-mode'), 10) === MODE_FLOATING
+            ? MODE_FLOATING
+            : MODE_DOCKED;
+        panel.float = readFloat($el);
+
         setWidth(parseInt($el.attr('data-width'), 10) || 380, false);
         updatePanelBounds();
+        applyMode();
 
         bindPanel();
         bindConversationThreads();
@@ -378,6 +390,11 @@
         panel.$el.find('.aicp-stop').on('click', function (e) {
             e.preventDefault();
             abortRequest();
+        });
+
+        panel.$el.find('.aicp-pin').on('click', function (e) {
+            e.preventDefault();
+            togglePanelMode();
         });
 
         panel.$el.find('.aicp-new-chat').on('click', function (e) {
@@ -446,6 +463,8 @@
         });
 
         bindResizer();
+        bindFloatDrag();
+        bindFloatResize();
     }
 
     // ---------------------------------------------------------------------
@@ -593,16 +612,19 @@
     /**
      * updatePanelBounds() on a scroll listener, at most once per frame.
      *
-     * applyLayoutMode() and applyWidth() ride along on the same throttle
-     * instead of adding a second resize listener. The first returns
+     * applyLayoutMode(), applyWidth() and applyMode() ride along on the same
+     * throttle instead of adding three more resize listeners. The first returns
      * immediately unless the mode actually changed; the second re-caps the
-     * panel against the new window width.
+     * panel against the new window width; the third re-clamps the floating
+     * window into a window that may have got smaller — without persisting, so
+     * a shrunken viewport never rewrites the geometry the user chose.
      */
     function scheduleBoundsUpdate() {
         if (!window.requestAnimationFrame) {
             updatePanelBounds();
             applyLayoutMode();
             applyWidth();
+            applyMode();
             return;
         }
 
@@ -615,6 +637,7 @@
             updatePanelBounds();
             applyLayoutMode();
             applyWidth();
+            applyMode();
         });
     }
 
@@ -632,6 +655,19 @@
     // The range UserPref will accept. Mirrors UserPref::WIDTH_MIN / WIDTH_MAX.
     var WIDTH_MIN = 300;
     var WIDTH_MAX = 900;
+
+    // Mirrors UserPref::MODE_DOCKED / MODE_FLOATING.
+    var MODE_DOCKED   = 1;
+    var MODE_FLOATING = 2;
+
+    // Mirrors UserPref::FLOAT_WIDTH_* / FLOAT_HEIGHT_*.
+    var FLOAT_WIDTH_MIN  = 320;
+    var FLOAT_WIDTH_MAX  = 1200;
+    var FLOAT_HEIGHT_MIN = 300;
+    var FLOAT_HEIGHT_MAX = 1200;
+
+    // Gap between a freshly undocked window and the corner it starts in.
+    var FLOAT_MARGIN = 24;
 
     function setWidth(width, persist) {
         // What the user chose. The window may not be wide enough to honour it
@@ -691,10 +727,204 @@
         document.documentElement.style.setProperty('--aicp-width', width + 'px');
     }
 
+    // ---------------------------------------------------------------------
+    // Floating window
+    // ---------------------------------------------------------------------
+
+    /**
+     * Whether the panel is a window rather than a column right now.
+     *
+     * The stored shape only applies where there is room for a window and a
+     * mouse to drag it with. Below the overlay breakpoint the drawer wins, in
+     * exactly the way it wins over the stored open state — and, in exactly the
+     * same way, that never writes the preference back.
+     */
+    function isFloating() {
+        return panel.pref_mode === MODE_FLOATING && !isOverlay();
+    }
+
+    /**
+     * The geometry the server rendered, or null if there is none.
+     *
+     * All four values or nothing: half a box is not a position to restore.
+     *
+     * @param jQuery $el
+     *
+     * @return object|null
+     */
+    function readFloat($el) {
+        var box = {
+            x: parseInt($el.attr('data-float-x'), 10),
+            y: parseInt($el.attr('data-float-y'), 10),
+            w: parseInt($el.attr('data-float-width'), 10),
+            h: parseInt($el.attr('data-float-height'), 10)
+        };
+
+        if (isNaN(box.x) || isNaN(box.y) || isNaN(box.w) || isNaN(box.h)) {
+            return null;
+        }
+
+        return box;
+    }
+
+    /**
+     * The box a window gets the first time it is undocked.
+     *
+     * Deliberately smaller than the column it came from — that is the point of
+     * undocking — and parked in the bottom right corner, where the column was,
+     * so it appears where the user was already looking.
+     */
+    function seedFloat() {
+        var w = clampFloatWidth(Math.min(panel.pref_width, 420));
+        var h = clampFloatHeight(Math.round(($(window).height() || 800) * 0.6));
+
+        panel.float = {
+            x: $(window).width() - w - FLOAT_MARGIN,
+            y: $(window).height() - h - FLOAT_MARGIN,
+            w: w,
+            h: h
+        };
+
+        panel.float = fitFloat();
+    }
+
+    function clampFloatWidth(width) {
+        return Math.max(FLOAT_WIDTH_MIN, Math.min(width, Math.min(FLOAT_WIDTH_MAX, $(window).width())));
+    }
+
+    function clampFloatHeight(height) {
+        return Math.max(FLOAT_HEIGHT_MIN, Math.min(height, Math.min(FLOAT_HEIGHT_MAX, $(window).height())));
+    }
+
+    /**
+     * The stored box as much of it as fits on screen right now.
+     *
+     * A copy, never the stored value — the same split applyWidth() makes with
+     * pref_width, and for the same reason: a window that is made smaller for a
+     * while must not eat the geometry the user chose on a larger one. Widening
+     * it again gives the stored position straight back. Only the user moving or
+     * sizing the window writes panel.float.
+     *
+     * Size first, then position: how far the window may be from the top left
+     * depends on how big it ended up. A viewport too small even for the
+     * minimum is the overlay's problem, not this one's — below that the panel
+     * is a drawer.
+     *
+     * @return object
+     */
+    function fitFloat() {
+        var box = {
+            x: panel.float.x,
+            y: panel.float.y,
+            w: clampFloatWidth(panel.float.w),
+            h: clampFloatHeight(panel.float.h)
+        };
+
+        box.x = Math.max(0, Math.min(box.x, $(window).width() - box.w));
+        box.y = Math.max(0, Math.min(box.y, $(window).height() - box.h));
+
+        return box;
+    }
+
+    /**
+     * Publish the floating box, the way applyWidth() publishes the width.
+     *
+     * Custom properties on documentElement rather than inline styles on the
+     * panel: one place to look, and the stylesheet stays in charge of which
+     * shape reads them.
+     */
+    function applyFloat() {
+        if (!panel.float) {
+            return;
+        }
+
+        var box = fitFloat();
+        var style = document.documentElement.style;
+
+        style.setProperty('--aicp-float-x', box.x + 'px');
+        style.setProperty('--aicp-float-y', box.y + 'px');
+        style.setProperty('--aicp-float-w', box.w + 'px');
+        style.setProperty('--aicp-float-h', box.h + 'px');
+    }
+
+    /**
+     * Put the current shape on <body> and the matching label on the button.
+     *
+     * Cheap enough to run on every animation frame the throttle produces:
+     * toggleClass and attr are no-ops when nothing changed.
+     */
+    function applyMode() {
+        if (!panel.$el) {
+            return;
+        }
+
+        var floating = isFloating();
+
+        if (floating && !panel.float) {
+            seedFloat();
+        }
+
+        $('body').toggleClass('aicp-floating', floating);
+
+        var $pin = panel.$el.find('.aicp-pin');
+
+        $pin.attr('title', floating ? t('dock') : t('undock'));
+        $pin.find('.glyphicon')
+            .toggleClass('glyphicon-new-window', !floating)
+            .toggleClass('glyphicon-pushpin', floating);
+
+        if (floating) {
+            applyFloat();
+        }
+    }
+
+    /**
+     * Dock a floating window, or undock a docked one.
+     *
+     * The shape is a preference like the width: written the moment it changes,
+     * and together with the seeded geometry when there was none, so the first
+     * undock survives a reload even if the window is never touched afterwards.
+     */
+    function togglePanelMode() {
+        // The button is hidden in the drawer, but a stray click must not store
+        // a shape the user cannot see.
+        if (isOverlay()) {
+            return;
+        }
+
+        panel.pref_mode = isFloating() ? MODE_DOCKED : MODE_FLOATING;
+
+        var data = {panel_mode: panel.pref_mode};
+        var seeded = panel.pref_mode === MODE_FLOATING && !panel.float;
+
+        applyMode();
+
+        if (seeded) {
+            data = $.extend(data, floatPrefs());
+        }
+
+        savePrefs(data);
+    }
+
+    function floatPrefs() {
+        return {
+            panel_float_x: panel.float.x,
+            panel_float_y: panel.float.y,
+            panel_float_width: panel.float.w,
+            panel_float_height: panel.float.h
+        };
+    }
+
     function bindResizer() {
         var dragging = false;
 
         panel.$el.find('.aicp-resizer').on('mousedown', function (e) {
+            // The grip is hidden in the other two shapes; this keeps the two
+            // drag implementations provably exclusive all the same.
+            if (isFloating()) {
+                return;
+            }
+
             e.preventDefault();
             dragging = true;
             $('body').addClass('aicp-resizing');
@@ -721,6 +951,169 @@
             );
 
             setWidth(current, true);
+        });
+    }
+
+    /**
+     * Move the floating window by its header.
+     *
+     * Mouse events only, like bindResizer(): the window is a desktop shape, and
+     * the drawer is what a touch screen gets.
+     */
+    function bindFloatDrag() {
+        var dragging = false;
+        var origin = null;
+
+        panel.$el.find('.aicp-header').on('mousedown', function (e) {
+            if (!isFloating() || e.which !== 1) {
+                return;
+            }
+
+            // The model picker and the header buttons are controls, not a grip.
+            if ($(e.target).closest('button, select, input, a').length) {
+                return;
+            }
+
+            e.preventDefault();
+
+            // From where the window is, not from where it is stored: after a
+            // spell on a smaller screen the two differ, and the drag has to
+            // follow the one the user can see.
+            var box = fitFloat();
+
+            dragging = true;
+            origin = {
+                page_x: e.pageX,
+                page_y: e.pageY,
+                x: box.x,
+                y: box.y
+            };
+
+            $('body').addClass('aicp-dragging');
+        });
+
+        $(document).on('mousemove', function (e) {
+            if (!dragging) {
+                return;
+            }
+
+            panel.float.x = origin.x + (e.pageX - origin.page_x);
+            panel.float.y = origin.y + (e.pageY - origin.page_y);
+
+            applyFloat();
+        });
+
+        $(document).on('mouseup', function () {
+            if (!dragging) {
+                return;
+            }
+
+            dragging = false;
+            $('body').removeClass('aicp-dragging');
+
+            // The user placed it here, so here is what gets stored.
+            panel.float = fitFloat();
+            savePrefs(floatPrefs());
+        });
+    }
+
+    // Which cursor <body> wears while a grip is held. The pointer leaves the
+    // grip during the drag, so the cursor cannot come from the grip's own rule.
+    var FLOAT_CURSORS = {
+        n: 'ns-resize',
+        s: 'ns-resize',
+        e: 'ew-resize',
+        w: 'ew-resize',
+        ne: 'nesw-resize',
+        sw: 'nesw-resize',
+        nw: 'nwse-resize',
+        se: 'nwse-resize'
+    };
+
+    /**
+     * Resize the floating window from any edge or corner.
+     *
+     * One handler for all eight grips: the direction is in the class name, and
+     * each compass letter in it says which side follows the mouse. The north
+     * and west sides move the window as they resize it, because the side
+     * opposite the one being dragged has to stay where it is.
+     */
+    function bindFloatResize() {
+        var direction = null;
+        var origin = null;
+
+        panel.$el.on('mousedown', '.aicp-fresize', function (e) {
+            if (!isFloating() || e.which !== 1) {
+                return;
+            }
+
+            var match = ($(this).attr('class') || '').match(/aicp-fresize-([a-z]+)/);
+
+            if (!match) {
+                return;
+            }
+
+            e.preventDefault();
+
+            var box = fitFloat();
+
+            direction = match[1];
+            origin = {
+                page_x: e.pageX,
+                page_y: e.pageY,
+                x: box.x,
+                y: box.y,
+                w: box.w,
+                h: box.h
+            };
+
+            $('body').addClass('aicp-fresizing');
+            document.body.style.cursor = FLOAT_CURSORS[direction] || 'auto';
+        });
+
+        $(document).on('mousemove', function (e) {
+            if (!direction) {
+                return;
+            }
+
+            var dx = e.pageX - origin.page_x;
+            var dy = e.pageY - origin.page_y;
+
+            if (direction.indexOf('e') !== -1) {
+                panel.float.w = origin.w + dx;
+            }
+
+            if (direction.indexOf('s') !== -1) {
+                panel.float.h = origin.h + dy;
+            }
+
+            // Clamp here rather than leaving it to applyFloat(): what the grip
+            // does not take off the size it must not add to the position
+            // either, or the far edge creeps once the minimum is reached.
+            if (direction.indexOf('w') !== -1) {
+                panel.float.w = clampFloatWidth(origin.w - dx);
+                panel.float.x = origin.x + origin.w - panel.float.w;
+            }
+
+            if (direction.indexOf('n') !== -1) {
+                panel.float.h = clampFloatHeight(origin.h - dy);
+                panel.float.y = origin.y + origin.h - panel.float.h;
+            }
+
+            applyFloat();
+        });
+
+        $(document).on('mouseup', function () {
+            if (!direction) {
+                return;
+            }
+
+            direction = null;
+            $('body').removeClass('aicp-fresizing');
+            document.body.style.cursor = '';
+
+            panel.float = fitFloat();
+            savePrefs(floatPrefs());
         });
     }
 

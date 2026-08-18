@@ -24,6 +24,14 @@
        so module.js keeps both in step with them — see updatePanelBounds(). */
     --aicp-top: 50px;
     --aicp-bottom: 0px;
+
+    /* The floating window's box, published by applyFloat() from the stored
+       geometry after it has been clamped to the viewport. Only read while
+       <body> carries .aicp-floating. */
+    --aicp-float-x: 0px;
+    --aicp-float-y: 0px;
+    --aicp-float-w: 420px;
+    --aicp-float-h: 560px;
 }
 
 /* ===================================================================
@@ -126,6 +134,142 @@ body.aicp-resizing {
 
 .aicp-backdrop {
     display: none;
+}
+
+/* ===================================================================
+   Floating window
+
+   The panel's second desktop shape. Same element, same flex column, but placed
+   by all four sides instead of hanging off the right edge — so it stops being
+   a column and the conversation gets its full width back.
+
+   .aicp-floating and .aicp-overlay are mutually exclusive: isFloating() is
+   false whenever isOverlay() is true, so a window is never asked to be a
+   drawer at the same time.
+   =================================================================== */
+
+body.aicp-floating .aicp-panel {
+    top: var(--aicp-float-y);
+    left: var(--aicp-float-x);
+    right: auto;
+    bottom: auto;
+    width: var(--aicp-float-w);
+    height: var(--aicp-float-h);
+    /* Over core's navbar (1000) — a window the user placed themselves should
+       not be sliced by it — and under Bootstrap's modal backdrop (1040). */
+    z-index: 1030;
+    border: 1px solid #d6dde3;
+    border-radius: 4px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, .2);
+}
+
+/* Nothing to shift: the window floats over the page. Three classes, so this
+   outranks the push-mode rule it overrides. */
+body.aicp-floating.aicp-open .content-2col {
+    margin-right: 0;
+}
+
+/* The docked left-edge grip belongs to the column. The window has its own. */
+body.aicp-floating .aicp-resizer {
+    display: none;
+}
+
+body.aicp-floating .aicp-header {
+    cursor: move;
+    border-radius: 3px 3px 0 0;
+}
+
+/* The controls in the header are still controls, not a drag surface. */
+body.aicp-floating .aicp-header-actions {
+    cursor: default;
+}
+
+body.aicp-dragging {
+    user-select: none;
+    cursor: move;
+}
+
+/* Set while an edge or a corner is being dragged. The cursor is put on <body>
+   inline for the duration, because which one it is depends on the grip. */
+body.aicp-fresizing {
+    user-select: none;
+}
+
+/* The grips. Straddling the border by 3px so they can be hit from just outside
+   the window as well as just inside it. Corners are declared after the edges
+   in the markup, which is what puts them on top where the two overlap. */
+.aicp-fresize {
+    display: none;
+    position: absolute;
+    z-index: 3;
+}
+
+body.aicp-floating .aicp-fresize {
+    display: block;
+}
+
+.aicp-fresize-n {
+    top: -3px;
+    left: 0;
+    right: 0;
+    height: 6px;
+    cursor: ns-resize;
+}
+
+.aicp-fresize-s {
+    bottom: -3px;
+    left: 0;
+    right: 0;
+    height: 6px;
+    cursor: ns-resize;
+}
+
+.aicp-fresize-e {
+    top: 0;
+    bottom: 0;
+    right: -3px;
+    width: 6px;
+    cursor: ew-resize;
+}
+
+.aicp-fresize-w {
+    top: 0;
+    bottom: 0;
+    left: -3px;
+    width: 6px;
+    cursor: ew-resize;
+}
+
+.aicp-fresize-ne,
+.aicp-fresize-nw,
+.aicp-fresize-se,
+.aicp-fresize-sw {
+    width: 14px;
+    height: 14px;
+}
+
+.aicp-fresize-ne {
+    top: -3px;
+    right: -3px;
+    cursor: nesw-resize;
+}
+
+.aicp-fresize-nw {
+    top: -3px;
+    left: -3px;
+    cursor: nwse-resize;
+}
+
+.aicp-fresize-se {
+    bottom: -3px;
+    right: -3px;
+    cursor: nwse-resize;
+}
+
+.aicp-fresize-sw {
+    bottom: -3px;
+    left: -3px;
+    cursor: nesw-resize;
 }
 
 /* ===================================================================
@@ -613,6 +757,13 @@ body.aicp-overlay .aicp-panel {
 }
 
 body.aicp-overlay .aicp-resizer {
+    display: none;
+}
+
+/* No undocking where there is no room to put a window, and no dragging one
+   with a finger. The stored shape is left alone — the drawer simply wins here,
+   the same way it wins over the stored open state. */
+body.aicp-overlay .aicp-pin {
     display: none;
 }
 

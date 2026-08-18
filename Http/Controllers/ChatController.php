@@ -599,7 +599,7 @@ class ChatController extends Controller
     }
 
     /**
-     * Remember the panel's open state, width and model choice.
+     * Remember the panel's open state, shape, geometry and model choice.
      *
      * No conversation involved, so this only needs an authenticated user.
      *
@@ -623,6 +623,25 @@ class ChatController extends Controller
 
         if ($request->has('panel_width')) {
             $pref->panel_width = UserPref::clampWidth($request->input('panel_width'));
+        }
+
+        if ($request->has('panel_mode')) {
+            $pref->panel_mode = UserPref::clampMode($request->input('panel_mode'));
+        }
+
+        // Where the floating window was left. Sent together on mouseup, so a
+        // drag or a resize is one request, not four.
+        $float = [
+            'panel_float_x'      => [0, UserPref::FLOAT_POS_MAX],
+            'panel_float_y'      => [0, UserPref::FLOAT_POS_MAX],
+            'panel_float_width'  => [UserPref::FLOAT_WIDTH_MIN, UserPref::FLOAT_WIDTH_MAX],
+            'panel_float_height' => [UserPref::FLOAT_HEIGHT_MIN, UserPref::FLOAT_HEIGHT_MAX],
+        ];
+
+        foreach ($float as $key => $range) {
+            if ($request->has($key)) {
+                $pref->{$key} = UserPref::clampFloat($request->input($key), $range[0], $range[1]);
+            }
         }
 
         if ($request->has('last_model')) {

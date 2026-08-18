@@ -13,6 +13,11 @@
      data-mailbox-id="{{ $conversation->mailbox_id }}"
      data-open="{{ $prefs['open'] ? '1' : '0' }}"
      data-width="{{ $prefs['width'] }}"
+     data-mode="{{ $prefs['mode'] ?? \Modules\AiChatPanel\Entities\UserPref::MODE_DOCKED }}"
+     data-float-x="{{ $prefs['float_x'] ?? '' }}"
+     data-float-y="{{ $prefs['float_y'] ?? '' }}"
+     data-float-width="{{ $prefs['float_width'] ?? '' }}"
+     data-float-height="{{ $prefs['float_height'] ?? '' }}"
      data-timezone="{{ $timezone }}"
      data-aicp-lang="{{ \Modules\AiChatPanel\Services\JsStrings::json() }}"
      data-url-history="{{ route('aichatpanel.chat.history') }}"
@@ -24,6 +29,21 @@
 
     <div class="aicp-resizer" role="separator" aria-orientation="vertical" title="{{ __('Drag to resize') }}"></div>
 
+    {{--
+        Grips for the floating window: four edges and four corners. Hidden by
+        the stylesheet unless <body> carries .aicp-floating, so the docked
+        column and the drawer are unaffected. The direction lives in the class
+        name — bindFloatResize() reads it from there.
+    --}}
+    <div class="aicp-fresize aicp-fresize-n"></div>
+    <div class="aicp-fresize aicp-fresize-s"></div>
+    <div class="aicp-fresize aicp-fresize-e"></div>
+    <div class="aicp-fresize aicp-fresize-w"></div>
+    <div class="aicp-fresize aicp-fresize-ne"></div>
+    <div class="aicp-fresize aicp-fresize-nw"></div>
+    <div class="aicp-fresize aicp-fresize-se"></div>
+    <div class="aicp-fresize aicp-fresize-sw"></div>
+
     <div class="aicp-header">
         <div class="aicp-header-title">
             <i class="glyphicon glyphicon-comment"></i>
@@ -32,6 +52,11 @@
 
         <div class="aicp-header-actions">
             <select class="aicp-model form-control input-sm" title="{{ __('Model') }}"></select>
+
+            {{-- Icon and title are swapped by applyMode() when the shape changes. --}}
+            <button type="button" class="btn btn-link btn-sm aicp-pin" title="{{ __('Undock') }}">
+                <i class="glyphicon glyphicon-new-window"></i>
+            </button>
 
             <button type="button" class="btn btn-link btn-sm aicp-new-chat" title="{{ __('New chat') }}">
                 <i class="glyphicon glyphicon-refresh"></i>

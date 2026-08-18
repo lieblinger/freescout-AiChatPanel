@@ -92,6 +92,8 @@
     "e.g. friendly but concise, address the customer informally": "z. B. freundlich, aber knapp; den Kunden duzen",
     "The global master switch for write tools still applies. A mailbox can narrow the selection, never widen it past what is globally allowed.": "Der globale Hauptschalter für schreibende Tools gilt weiterhin. Ein Postfach kann die Auswahl einschränken, aber nie über das global Erlaubte hinaus erweitern.",
     "New chat": "Neuer Chat",
+    "Dock": "Andocken",
+    "Undock": "Abdocken",
     "Close": "Schließen",
     "Send": "Senden",
     "Stop": "Stopp",

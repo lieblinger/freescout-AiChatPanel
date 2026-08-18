@@ -18,9 +18,10 @@ Licence: **AGPL-3.0-or-later**.
 ## What it does
 
 - A resizable chat panel on the right of the conversation, opened from a toolbar
-  button. Open/closed state and width persist per user, and the panel gets out
-  of the way rather than let the conversation become unreadable — see
-  [Responsive behaviour](#responsive-behaviour).
+  button, and undockable into a window you can drag anywhere and size from any
+  edge. Open/closed state, width, shape and the window's position persist per
+  user, and the panel gets out of the way rather than let the conversation
+  become unreadable — see [Responsive behaviour](#responsive-behaviour).
 - Multi-turn chat about the open conversation, with the full thread history,
   conversation metadata, customer details and attachment filenames as context.
 - Streaming responses, rendered as Markdown and sanitised.
@@ -43,6 +44,27 @@ Licence: **AGPL-3.0-or-later**.
   restores the whole exchange including tool calls.
 - English and German UI.
 
+### Docked or floating
+
+On a desktop the panel has two shapes, swapped with the pin button in its
+header:
+
+| Shape | What it is | Conversation layout |
+|---|---|---|
+| **Docked** (default) | A column on the right, full height, drag its left edge to set the width (300–900px) | shifted left by the panel width |
+| **Floating** | A smaller window over the page — drag the header to move it, any edge or corner to size it (320–1200px each way) | untouched, the thread keeps its full width |
+
+The first undock puts the window in the bottom right corner, roughly 420px wide
+and three fifths of the window tall. Shape, position and size are stored per
+user, so the window comes back where it was left — in any browser, not just the
+one it was moved in.
+
+A window is always fully on screen: on a smaller monitor it is capped to the
+viewport and pulled back inside it, **for display only**. The stored geometry is
+untouched, so the original monitor gets the original position straight back —
+the same split the docked width already makes. Below the drawer breakpoint there
+is no window at all: the panel is a drawer and the pin button is hidden.
+
 ### Responsive behaviour
 
 **The message thread always wins.** The panel takes a column of its own only
@@ -55,6 +77,7 @@ the window before the panel gets to ask for anything.
 | Panel | Conversation layout | Opens itself from the saved preference |
 |---|---|---|
 | column on the right, drag to resize (300–900px) | shifted left by the panel width | yes |
+| floating window, dragged and sized by the user | untouched | yes |
 | drawer over the thread, dismissed by tapping the dimmer | untouched | no — starts closed |
 | drawer, full width (≤ 767px) | untouched | no — starts closed |
 
