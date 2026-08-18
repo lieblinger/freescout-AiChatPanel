@@ -20,6 +20,15 @@ class UserPref extends Model
     const MODE_FLOATING = 2;
 
     /**
+     * The shape a user who has never chosen one gets.
+     *
+     * The window, not the column: the panel is closed until it is asked for,
+     * and when it is asked for it should not take a third of the conversation
+     * away. Docking is one click on the pin, and it is remembered from then on.
+     */
+    const MODE_DEFAULT = self::MODE_FLOATING;
+
+    /**
      * The range the floating window may be dragged to.
      *
      * Wider than the docked range at both ends: a floating window does not have
@@ -69,7 +78,7 @@ class UserPref extends Model
             'user_id'     => $user_id,
             'panel_open'  => false,
             'panel_width' => self::WIDTH_DEFAULT,
-            'panel_mode'  => self::MODE_DOCKED,
+            'panel_mode'  => self::MODE_DEFAULT,
         ]);
     }
 

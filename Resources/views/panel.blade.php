@@ -31,7 +31,7 @@
      data-mailbox-id="{{ $conversation->mailbox_id }}"
      data-open="{{ $prefs['open'] ? '1' : '0' }}"
      data-width="{{ $prefs['width'] }}"
-     data-mode="{{ $prefs['mode'] ?? \Modules\AiChatPanel\Entities\UserPref::MODE_DOCKED }}"
+     data-mode="{{ $prefs['mode'] ?? \Modules\AiChatPanel\Entities\UserPref::MODE_DEFAULT }}"
      data-float-x="{{ $prefs['float_x'] ?? '' }}"
      data-float-y="{{ $prefs['float_y'] ?? '' }}"
      data-float-width="{{ $prefs['float_width'] ?? '' }}"
@@ -69,7 +69,13 @@
         </div>
 
         <div class="aicp-header-actions">
-            <select class="aicp-model form-control input-sm" title="{{ __('Model') }}"></select>
+            {{--
+                Hidden until fillModels() has something worth picking from: it
+                starts empty, and a history request that never arrives or comes
+                back with a single model must not leave an empty dropdown in the
+                header. fillModels() unhides it when there are two or more.
+            --}}
+            <select class="aicp-model form-control input-sm hidden" title="{{ __('Model') }}"></select>
 
             {{-- Icon and title are swapped by applyMode() when the shape changes. --}}
             <button type="button" class="btn btn-link btn-sm aicp-pin" title="{{ __('Undock') }}">

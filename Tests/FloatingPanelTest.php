@@ -222,9 +222,38 @@ class FloatingPanelTest extends AiChatPanelTestCase
     {
         $pref = UserPref::forUser($this->agent->id);
 
-        $this->assertEquals(UserPref::MODE_DOCKED, $pref->panel_mode);
+        $this->assertEquals(UserPref::MODE_FLOATING, $pref->panel_mode);
         $this->assertNull($pref->panel_float_x);
         $this->assertNull($pref->panel_float_width);
+    }
+
+    /**
+     * The shape nobody has chosen is the window, and the panel is still shut
+     * until it is asked for.
+     *
+     * @return void
+     */
+    public function testAFreshUserStartsClosedAndUndocked()
+    {
+        $pref = UserPref::forUser($this->agent->id);
+
+        $this->assertFalse((bool) $pref->panel_open);
+        $this->assertEquals(UserPref::MODE_FLOATING, UserPref::MODE_DEFAULT);
+        $this->assertEquals(UserPref::MODE_DEFAULT, $pref->panel_mode);
+    }
+
+    /**
+     * Docking is a choice, and a choice survives the default changing.
+     *
+     * @return void
+     */
+    public function testADockedPreferenceIsKept()
+    {
+        $pref = UserPref::forUser($this->agent->id);
+        $pref->panel_mode = UserPref::MODE_DOCKED;
+        $pref->save();
+
+        $this->assertEquals(UserPref::MODE_DOCKED, UserPref::forUser($this->agent->id)->panel_mode);
     }
 
     /**

@@ -101,4 +101,46 @@ class ModelCatalogueTest extends AiChatPanelTestCase
         // "Llama 4" before "Llama 31" — a plain string sort gets this backwards.
         $this->assertEquals(['l1', 'l4'], array_column($sorted, 'id'));
     }
+
+    /**
+     * An empty picker is never on screen.
+     *
+     * The select is filled from the history response, so it is empty while that
+     * request is in flight — and stays empty when it fails, or when the endpoint
+     * reports nothing. fillModels() hides it in the cases it sees; the markup
+     * has to cover the case it never gets to run for.
+     *
+     * @return void
+     */
+    public function testTheModelPickerStartsHidden()
+    {
+        $blade = file_get_contents(__DIR__.'/../Resources/views/panel.blade.php');
+
+        $this->assertMatchesRegularExpression(
+            '~<select class="aicp-model[^"]*\bhidden\b~',
+            $blade,
+            'The model picker is rendered visible, so an empty dropdown sits in the header '
+                .'until the history response arrives — and forever if it never does.'
+        );
+    }
+
+    /**
+     * @return void
+     */
+    public function testAnEmptyModelListLeavesThePickerHidden()
+    {
+        $js = file_get_contents(__DIR__.'/../Public/js/module.js');
+
+        $this->assertMatchesRegularExpression(
+            '~if\s*\(!models\.length\)\s*\{[^}]*\}?[^}]*\$select\.addClass\(.hidden.\)~s',
+            $js,
+            'fillModels() no longer hides the picker when the endpoint reports no models.'
+        );
+
+        $this->assertMatchesRegularExpression(
+            '~\$select\.toggleClass\(.hidden., models\.length < 2\)~',
+            $js,
+            'fillModels() no longer hides the picker when there is only one model to pick.'
+        );
+    }
 }
