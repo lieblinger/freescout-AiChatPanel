@@ -71,6 +71,7 @@ return [
 
         // -- Tools ---------------------------------------------------------
         'tools_enabled'       => ['default' => [
+            'time_now',
             'conversation_list_customer_conversations',
             'conversation_get',
             'conversation_get_drafts',

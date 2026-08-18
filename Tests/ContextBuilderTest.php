@@ -124,7 +124,11 @@ class ContextBuilderTest extends AiChatPanelTestCase
             $this->addThread('<div>Message number '.$i.'. '.str_repeat('padding text ', 120).'</div>');
         }
 
-        $this->setSettings(['max_context_tokens' => 2000]);
+        // Enough for the fixed blocks — instructions, the clock, metadata, the
+        // agent — plus a message or two, and nowhere near enough for twelve.
+        // Too tight and the test stops testing the ordering: with no room for
+        // any message at all, "the newest survives" is trivially false.
+        $this->setSettings(['max_context_tokens' => 2600]);
 
         $built = (new ContextBuilder($this->context()))->build(0);
 

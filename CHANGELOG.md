@@ -4,6 +4,12 @@ Newest first. No release so far has removed a setting or changed an endpoint.
 1.3.1 is the first to require a migration; it rewrites stored chat history and
 runs with the module's other migrations.
 
+## 1.3.2
+
+* New - The assistant knows what day it is. The current date and time are in every request, so "how long has this been open", "has that date passed" and "reply that we will ship on Monday" no longer get answered from whatever the model's training data thought today was.
+* Fix - Every timestamp the assistant is shown is now in the agent's own timezone, the same one the conversation view uses. It was being given the raw stored value with no timezone stated, so on any install not running in UTC it reported message times that disagreed with the screen the agent was reading — and worked out elapsed times from them.
+* New - A `time_now` tool, off by default. It reports the clock plus the conversation's age and the time since the last message, worked out in PHP rather than by the model. Tick it in Settings » AI Chat Panel to switch it on; fresh installs have it on already.
+
 ## 1.3.1
 
 * Fix - A chat that was started before 1.3.0 works again. Its stored turns still named the tools the way they were spelled then, that history is replayed to the model on every later message, and the model copied the old spelling back — so a request to save a draft reply came back as `Unknown tool "conversation.create_draft_reply"`. The stored names are renamed on upgrade, and the old spelling is accepted from the model in any case.

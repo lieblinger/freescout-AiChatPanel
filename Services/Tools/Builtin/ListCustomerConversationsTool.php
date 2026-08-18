@@ -3,6 +3,7 @@
 namespace Modules\AiChatPanel\Services\Tools\Builtin;
 
 use App\Conversation;
+use Modules\AiChatPanel\Services\Clock;
 use Modules\AiChatPanel\Services\PanelContext;
 use Modules\AiChatPanel\Services\Tools\AbstractTool;
 use Modules\AiChatPanel\Services\Tools\ToolResult;
@@ -118,8 +119,8 @@ class ListCustomerConversationsTool extends AbstractTool
                 'number'     => (int) $conversation->number,
                 'subject'    => (string) $conversation->subject,
                 'status'     => $this->statusName($conversation->status),
-                'created_at' => $conversation->created_at ? $conversation->created_at->toDateString() : null,
-                'updated_at' => $conversation->updated_at ? $conversation->updated_at->toDateString() : null,
+                'created_at' => $conversation->created_at ? Clock::date($conversation->created_at, $context->user) : null,
+                'updated_at' => $conversation->updated_at ? Clock::date($conversation->updated_at, $context->user) : null,
                 'mailbox'    => $conversation->mailbox ? $conversation->mailbox->name : null,
             ];
         }

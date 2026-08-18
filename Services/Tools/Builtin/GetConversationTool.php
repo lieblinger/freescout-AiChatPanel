@@ -4,6 +4,7 @@ namespace Modules\AiChatPanel\Services\Tools\Builtin;
 
 use App\Conversation;
 use App\Thread;
+use Modules\AiChatPanel\Services\Clock;
 use Modules\AiChatPanel\Services\Context\ThreadFormatter;
 use Modules\AiChatPanel\Services\PanelContext;
 use Modules\AiChatPanel\Services\Tools\AbstractTool;
@@ -125,7 +126,7 @@ class GetConversationTool extends AbstractTool
             $messages[] = [
                 'kind'      => ThreadFormatter::kind($thread),
                 'author'    => ThreadFormatter::author($thread),
-                'date'      => $thread->created_at ? $thread->created_at->toDateTimeString() : null,
+                'date'      => $thread->created_at ? Clock::dateTime($thread->created_at, $context->user) : null,
                 // Keep individual messages bounded: one runaway thread should
                 // not be able to consume the whole remaining context.
                 'body'      => \Illuminate\Support\Str::limit($body, 4000),
@@ -138,7 +139,7 @@ class GetConversationTool extends AbstractTool
             'number'      => (int) $conversation->number,
             'subject'     => (string) $conversation->subject,
             'status'      => $this->statusName($conversation->status),
-            'created_at'  => $conversation->created_at ? $conversation->created_at->toDateTimeString() : null,
+            'created_at'  => $conversation->created_at ? Clock::dateTime($conversation->created_at, $context->user) : null,
             'mailbox'     => $conversation->mailbox ? $conversation->mailbox->name : null,
             'assignee'    => $conversation->user ? $conversation->user->getFullName() : null,
             'customer'    => $customer ? $customer->getFullName(true) : null,

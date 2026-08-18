@@ -3,6 +3,7 @@
 namespace Modules\AiChatPanel\Services\Context;
 
 use App\Thread;
+use Modules\AiChatPanel\Services\Clock;
 use Modules\AiChatPanel\Services\PanelContext;
 
 /**
@@ -92,6 +93,12 @@ class ContextBuilder
         $this->budget->reserve(TokenBudget::estimate($instructions));
         $this->budget->reserve(max(0, (int) $reserve_for_history));
 
+        // Forty-odd tokens, reserved before anything that can be dropped. A
+        // model that does not know today's date answers time questions from its
+        // training cut-off, and it has no way of telling that it is guessing.
+        $now = $this->now();
+        $this->budget->reserve(TokenBudget::estimate($now));
+
         // Metadata is small and always worth having; the model is much less
         // useful without knowing who it is talking about — or, for the agent
         // block, who it is talking to. Both are reserved before the thread
@@ -114,7 +121,7 @@ class ContextBuilder
 
         $thread = $this->threadHistory();
 
-        $sections = [$instructions, $metadata];
+        $sections = [$instructions, $now, $metadata];
 
         if ($agent !== '') {
             $sections[] = $agent;
@@ -166,6 +173,7 @@ class ContextBuilder
         $lines[] = '- Be concise and concrete. Prefer the facts in the conversation over general advice.';
         $lines[] = '- If the conversation does not contain enough information to answer, say so plainly instead of inventing details.';
         $lines[] = '- Never invent order numbers, prices, dates, policies or names. If you need a fact you do not have, say what is missing.';
+        $lines[] = '- The current date and time are given below. Work everything time-related out from them and never guess today\'s date. A delivery date, a deadline, an opening time or a turnaround you were not given is not yours to state.';
         $lines[] = '- Attachments reach you as a filename and a type, nothing more. You cannot see an image or read a document, and a filename is not evidence of what is in the file: "Kontakt_im_Rahmen.JPG" tells you someone named a photo, not what it shows. Never say you have looked at, seen, examined or checked an attachment, and never describe what one contains.';
         $lines[] = '- You also cannot attach anything to a draft. Never write that something is attached, enclosed or included — if something needs attaching, write the draft without it and tell the agent what to attach.';
         $lines[] = '- Never state that an action has already been taken — an order placed, a request passed to a colleague, a check carried out, a message forwarded — unless the conversation or the agent says it was. The same goes for what happens next: promise nothing on the agent\'s behalf that they have not told you.';
@@ -252,6 +260,30 @@ class ContextBuilder
     }
 
     /**
+     * What day it is, on the agent's clock.
+     *
+     * Unconditional, and not behind a tool: a model with tool calling switched
+     * off — which this panel supports — would otherwise have no way to reach it,
+     * and unlike a fact it can look up, the model has no idea it is missing.
+     * Left to itself it answers from its training cut-off, confidently.
+     *
+     * The timezone sentence is the other half. Every date here is converted to
+     * the agent's own zone by Clock so that it agrees with the screen they are
+     * reading; saying which zone that is stops the model hedging about it.
+     *
+     * @return string
+     */
+    protected function now()
+    {
+        $user = $this->context->user;
+        $now = Clock::now($user);
+
+        return 'Current date and time: '.$now->format('l, '.Clock::FORMAT_DATE_TIME)
+            .' ('.Clock::timezone($user).', UTC'.Clock::offset($user).'). '
+            .'Every timestamp you are given, here and in tool results, is in this timezone.';
+    }
+
+    /**
      * @return string
      */
     protected function metadata()
@@ -264,7 +296,7 @@ class ContextBuilder
         $rows[] = 'Subject: '.$this->sanitise($conversation->subject);
         $rows[] = 'Conversation number: #'.$conversation->number;
         $rows[] = 'Status: '.$this->statusName($conversation);
-        $rows[] = 'Created: '.($conversation->created_at ? $conversation->created_at->toDateTimeString() : 'unknown');
+        $rows[] = 'Created: '.($conversation->created_at ? Clock::dateTime($conversation->created_at, $this->context->user) : 'unknown');
 
         $assignee = $conversation->user;
         $rows[] = 'Assigned to: '.($assignee ? $this->sanitise($assignee->getFullName()) : 'nobody');
@@ -547,7 +579,7 @@ class ContextBuilder
 
         $header = '['.ThreadFormatter::kind($thread).'] '
             .ThreadFormatter::author($thread)
-            .' — '.($thread->created_at ? $thread->created_at->toDateTimeString() : 'unknown date');
+            .' — '.($thread->created_at ? Clock::dateTime($thread->created_at, $this->context->user) : 'unknown date');
 
         $attachments = $this->attachmentList($thread);
 

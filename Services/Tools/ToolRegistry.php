@@ -578,6 +578,7 @@ class ToolRegistry
     protected function builtin()
     {
         return [
+            new Builtin\TimeNowTool(),
             new Builtin\ListCustomerConversationsTool(),
             new Builtin\GetConversationTool(),
             new Builtin\GetCustomerTool(),

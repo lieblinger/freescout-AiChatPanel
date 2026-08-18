@@ -39,6 +39,7 @@ Two Eventy details that catch people out:
   - [Registering them](#registering-them)
   - [Rules the registry enforces for you](#rules-the-registry-enforces-for-you)
   - [Writing a thread body from a tool](#writing-a-thread-body-from-a-tool)
+  - [Dates in a tool result](#dates-in-a-tool-result)
   - [Writing a good description](#writing-a-good-description)
 - [Context providers](#context-providers)
 - [Prompt shortcuts](#prompt-shortcuts)
@@ -323,6 +324,30 @@ Going the other way — reading a stored body back for the prompt — use
 `Context\ThreadFormatter::body()` if you also want the quote chain and signature
 removed.
 
+### Dates in a tool result
+
+Render every date through `Services\Clock`, never `->toDateTimeString()`:
+
+```php
+use Modules\AiChatPanel\Services\Clock;
+
+'created_at' => Clock::dateTime($invoice->created_at, $context->user),  // 'Y-m-d H:i'
+'due_on'     => Clock::date($invoice->due_on, $context->user),          // 'Y-m-d'
+'overdue_by' => Clock::humanDiff($invoice->due_on, $context->user),     // '3 days'
+```
+
+The system message tells the model, once, that every timestamp it is given is
+in the agent's timezone. A raw column value contradicts that — silently, and by
+the agent's UTC offset — and the model has no way to notice. The same applies to
+any date a context provider writes into its block.
+
+`Clock` also handles the two things that are easy to get wrong by hand: it
+copies before converting, so it never mutates the model attribute you handed it,
+and `humanDiff()` is English regardless of the interface language, so your tool
+result does not change wording with whoever is logged in.
+
+If your tool needs to know what "today" is, it can ask `Clock::now($context->user)`.
+
 ### Writing a good description
 
 The description is prompt text. It is the single biggest influence on whether
@@ -547,5 +572,6 @@ Before you ship:
 - [ ] Handlers return `ToolResult`, and throw `ToolException` for expected failures.
 - [ ] Nothing sensitive in a `ToolException` message — it goes into the prompt.
 - [ ] Other conversations are filtered through `canViewConversation()`.
+- [ ] Dates go through `Clock`, not `->toDateTimeString()`.
 - [ ] `$context` may be `null` in the filter callback.
 - [ ] Both filters registered with `20, 2`.

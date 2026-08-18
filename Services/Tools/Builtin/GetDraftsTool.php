@@ -5,6 +5,7 @@ namespace Modules\AiChatPanel\Services\Tools\Builtin;
 use App\Conversation;
 use App\Thread;
 use Illuminate\Support\Str;
+use Modules\AiChatPanel\Services\Clock;
 use Modules\AiChatPanel\Services\Context\ThreadFormatter;
 use Modules\AiChatPanel\Services\PanelContext;
 use Modules\AiChatPanel\Services\Tools\AbstractTool;
@@ -98,7 +99,7 @@ class GetDraftsTool extends AbstractTool
                 'thread_id' => $thread->id,
                 'kind'      => ThreadFormatter::kind($thread),
                 'author'    => ThreadFormatter::author($thread),
-                'date'      => $thread->created_at ? $thread->created_at->toDateTimeString() : null,
+                'date'      => $thread->created_at ? Clock::dateTime($thread->created_at, $context->user) : null,
                 'body'      => Str::limit(ThreadFormatter::draftBody($thread), self::MAX_BODY_CHARS),
             ];
         }

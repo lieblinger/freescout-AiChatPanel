@@ -3,6 +3,7 @@
 namespace Modules\AiChatPanel\Services\Context\Providers;
 
 use App\Conversation;
+use Modules\AiChatPanel\Services\Clock;
 use Modules\AiChatPanel\Services\Context\ContextProvider;
 use Modules\AiChatPanel\Services\PanelContext;
 
@@ -84,7 +85,7 @@ class PreviousConversationsProvider implements ContextProvider
                 '- #%s (%s, %s): %s',
                 $conversation->number,
                 $this->statusName($conversation),
-                $conversation->created_at ? $conversation->created_at->toDateString() : 'unknown date',
+                $conversation->created_at ? Clock::date($conversation->created_at, $context->user) : 'unknown date',
                 (string) $conversation->subject
             );
         }

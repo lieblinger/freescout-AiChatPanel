@@ -75,6 +75,7 @@ back up, again without touching the preference.
 
 | Tool | Mode | What it does |
 |---|---|---|
+| `time_now` | read | the current date and time, and how long the conversation has been open |
 | `conversation_list_customer_conversations` | read | other conversations of this customer |
 | `conversation_get` | read | one conversation by number, with its messages |
 | `conversation_get_drafts` | read | the unsent drafts on a conversation, with their thread ids |
@@ -84,9 +85,16 @@ back up, again without touching the preference.
 | `conversation_create_draft_reply` | write | save a new draft reply (never sends) |
 | `conversation_update_draft` | write | replace the text of an existing draft (never sends) |
 
-The four read tools are on by default; the write tools start **disabled** and
+The five read tools are on by default; the write tools start **disabled** and
 are gated behind the "Allow write tools" master switch. Read tools run without
 asking; every write tool is confirmed in the panel first.
+
+**Time.** The current date and time are in the system message on every request,
+in the agent's own timezone, and so is every other timestamp the model is shown.
+The model is told which timezone that is. `time_now` exists for the arithmetic
+on top of that — how old the ticket is, how long since anyone wrote — because
+models subtract dates unreliably and give no sign when they get it wrong. It is
+computed in PHP and handed over in words.
 
 **Drafts.** Drafts are deliberately absent from the conversation history the
 model is given, so `conversation_get_drafts` is the only way it sees one — which
