@@ -51,6 +51,18 @@ class GetDraftsTool extends AbstractTool
     }
 
     /**
+     * The only draft on a mail being composed is that mail, which the model
+     * already has as the editor contents. Offering this tool there would have
+     * it read back a stale copy of what the agent is typing.
+     *
+     * {@inheritdoc}
+     */
+    public function isRelevant(PanelContext $context)
+    {
+        return !$context->isUnsentDraft();
+    }
+
+    /**
      * {@inheritdoc}
      */
     public function parameters()

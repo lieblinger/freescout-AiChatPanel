@@ -47,6 +47,7 @@ class JsStrings
             'empty_title'        => __('Ask about this conversation, or pick one of the shortcuts below.'),
             'empty_hint'         => __('Nothing you write here is sent to the customer. Drafts are inserted into the reply editor for you to review.'),
             'load_failed'        => __('Could not load the chat.'),
+            'draft_failed'       => __('Could not start a conversation for this chat. Try saving the draft first.'),
             'reset_failed'       => __('Could not start a new chat.'),
             'resolve_pending'    => __('Approve or reject the pending action first.'),
             'forbidden'          => __('You do not have access to this conversation.'),

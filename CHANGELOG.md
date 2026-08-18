@@ -6,6 +6,10 @@ runs with the module's other migrations.
 
 ## 1.3.2
 
+* New - The chat works while a new mail is being written, not only on a conversation that already exists. Open it from the toolbar on the New Conversation screen, ask for the mail you want, and insert the answer into the editor. If the recipient is someone you have written to before, their earlier conversations are available to the assistant the same way they are on an existing ticket.
+* New - The chat that produced a mail is still there after it is sent. It is kept with the draft FreeScout creates for the compose form, and sending publishes that same conversation — so reopening the ticket shows the exchange the mail came out of. Discarding the draft takes the chat with it.
+* New - The panel appears on a saved draft you reopen. That screen is the compose screen, so it never had one.
+* Change - While a mail is unsent the assistant writes its answer in the chat for you to insert, and the tools that save a draft reply, rewrite a draft, add a note or set a status are withheld. There is nothing for them to act on until the mail has been sent, and the mail itself is what you are editing.
 * New - The assistant knows what day it is. The current date and time are in every request, so "how long has this been open", "has that date passed" and "reply that we will ship on Monday" no longer get answered from whatever the model's training data thought today was.
 * Fix - Every timestamp the assistant is shown is now in the agent's own timezone, the same one the conversation view uses. It was being given the raw stored value with no timezone stated, so on any install not running in UTC it reported message times that disagreed with the screen the agent was reading — and worked out elapsed times from them.
 * New - A `time_now` tool, off by default. It reports the clock plus the conversation's age and the time since the last message, worked out in PHP rather than by the model. Tick it in Settings » AI Chat Panel to switch it on; fresh installs have it on already.

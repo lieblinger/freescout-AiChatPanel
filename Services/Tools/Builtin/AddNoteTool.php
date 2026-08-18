@@ -81,6 +81,18 @@ class AddNoteTool extends AbstractTool
     }
 
     /**
+     * Nothing to annotate on a mail that has not been sent: the agent is
+     * looking at the whole of it, and a note filed against it would surface
+     * only once the mail goes out.
+     *
+     * {@inheritdoc}
+     */
+    public function isRelevant(PanelContext $context)
+    {
+        return !$context->isUnsentDraft();
+    }
+
+    /**
      * {@inheritdoc}
      */
     public function confirmationLabel(array $arguments, PanelContext $context)

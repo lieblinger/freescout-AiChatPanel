@@ -100,6 +100,13 @@ class UpdateDraftTool extends AbstractTool
      */
     public function isRelevant(PanelContext $context)
     {
+        // The one draft on a mail being composed is that mail. It reaches the
+        // model as the editor contents and is rewritten there, not through a
+        // tool that would overwrite what the agent is typing.
+        if ($context->isUnsentDraft()) {
+            return false;
+        }
+
         return $context->conversation->threads()
             ->where('state', Thread::STATE_DRAFT)
             ->exists();

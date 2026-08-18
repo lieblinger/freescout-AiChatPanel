@@ -45,6 +45,29 @@ class PanelContext
     }
 
     /**
+     * Whether this is a mail the agent is still composing.
+     *
+     * FreeScout keeps a new conversation in STATE_DRAFT until it is sent, and
+     * renders the compose screen for it either way, so this is true both while
+     * the mail is being written and when a saved draft is reopened. It stops
+     * being true the moment send_reply publishes the conversation — the same
+     * conversation, which is why the chat survives the send.
+     *
+     * Tools that write into a conversation withhold themselves while it holds,
+     * and the prompt says plainly that nothing has been sent or received.
+     *
+     * @return bool
+     */
+    public function isUnsentDraft()
+    {
+        if (!$this->conversation->id) {
+            return true;
+        }
+
+        return (int) $this->conversation->state === Conversation::STATE_DRAFT;
+    }
+
+    /**
      * Whether the acting user may see this conversation at all.
      *
      * Delegates to core's ConversationPolicy rather than reimplementing the

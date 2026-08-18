@@ -95,6 +95,20 @@ body.aicp-open .aicp-panel {
     display: flex;
 }
 
+/* The compose screen's toolbar toggle, moved into #conv-toolbar by
+   moveComposeToggle(). A group of its own rather than a third button in the
+   email/phone switch, which would read as a third kind of conversation — hence
+   the gap. It is rendered .aicp-unplaced at the foot of the page and only shown
+   once it has been moved, so it never flashes there first. */
+.aicp-toolbar-group {
+    margin-left: 10px;
+    vertical-align: top;
+}
+
+.aicp-toolbar-group.aicp-unplaced {
+    display: none;
+}
+
 /* Shift the conversation layout instead of overlapping it.
 
    The margin goes on .content-2col, NOT on #conv-layout and friends. Core gives

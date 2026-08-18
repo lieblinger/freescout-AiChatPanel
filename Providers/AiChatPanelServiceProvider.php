@@ -268,65 +268,117 @@ class AiChatPanelServiceProvider extends ServiceProvider
         // conversation.after_prev_convs, fires even when the conversation has
         // no customer.
         \Eventy::addAction('conversation.after_customer_sidebar', function ($conversation) {
-            try {
-                $user = auth()->user();
+            $this->renderPanel($conversation, false);
+        }, 20, 1);
 
-                if (!$user || !$conversation) {
-                    return;
-                }
+        // The same panel on the compose screen. Core fires this at the very end
+        // of @section('content') in conversations/create.blade.php, outside
+        // #conv-layout — the only injection point there that no JavaScript
+        // later overwrites. #conv-layout-customer is rebuilt from scratch on
+        // every recipient change (main.js:1849), so the hook that sits inside
+        // it is unusable for anything stateful.
+        //
+        // Core renders create.blade.php for a saved draft as well
+        // (ConversationsController.php:227), so this is also what puts the panel
+        // on a reopened draft. after_customer_sidebar does not fire there, so
+        // the two registrations can never both run on one page.
+        \Eventy::addAction('new_conversation_form.after', function ($conversation) {
+            $this->renderPanel($conversation, true);
+        }, 20, 1);
+    }
 
-                $mailbox = $conversation->mailbox;
+    /**
+     * Render the panel.
+     *
+     * @param \App\Conversation|null $conversation On the compose screen this is
+     *                                             an unsaved model with no id:
+     *                                             core creates the draft
+     *                                             conversation from the first
+     *                                             autosave, and module.js picks
+     *                                             the id up when it appears.
+     * @param bool                   $compose      Whether this is the compose
+     *                                             screen rather than a
+     *                                             conversation being read.
+     *
+     * @return void
+     */
+    protected function renderPanel($conversation, $compose)
+    {
+        try {
+            $user = auth()->user();
 
-                if (!\Modules\AiChatPanel\Services\Settings::isUsable($mailbox)) {
-                    return;
-                }
+            if (!$user || !$conversation) {
+                return;
+            }
 
-                // Server-side gate. The routes check this again per request;
-                // this only decides whether to render anything at all.
+            $mailbox = $conversation->mailbox;
+
+            if (!$mailbox && $compose) {
+                // create.blade.php is reached with the mailbox in the route
+                // rather than on the conversation.
+                $mailbox = \App\Mailbox::find(request()->route('mailbox_id'));
+            }
+
+            if (!\Modules\AiChatPanel\Services\Settings::isUsable($mailbox)) {
+                return;
+            }
+
+            // Server-side gate. The routes check this again per request;
+            // this only decides whether to render anything at all. There is
+            // nothing to authorise against until the draft exists, so while
+            // composing the mailbox is the subject.
+            if ($conversation->id) {
                 if (!$user->can('view', $conversation)) {
                     return;
                 }
-
-                $prefs = \Modules\AiChatPanel\Entities\UserPref::forUser($user->id);
-
-                $shortcuts = \Modules\AiChatPanel\Services\Settings::get('prompt_shortcuts', $mailbox);
-
-                if (!is_array($shortcuts)) {
-                    $shortcuts = [];
-                }
-
-                // Let other modules contribute shortcuts.
-                $context = new \Modules\AiChatPanel\Services\PanelContext($conversation, $user);
-                $shortcuts = \Eventy::filter('aichatpanel.prompt_shortcuts', $shortcuts, $context);
-
-                // Tells registerVendorScripts() to emit marked and DOMPurify.
-                // This hook fires inside @yield('content'), which the layout
-                // renders before @action('layout.body_bottom').
-                app()->instance(self::PANEL_RENDERED, true);
-
-                echo \View::make(AICHATPANEL_MODULE.'::panel', [
-                    'conversation' => $conversation,
-                    'shortcuts'    => is_array($shortcuts) ? $shortcuts : [],
-                    'prefs'        => [
-                        'open'  => (bool) $prefs->panel_open,
-                        'width' => (int) $prefs->panel_width,
-                        'mode'  => \Modules\AiChatPanel\Entities\UserPref::clampMode($prefs->panel_mode),
-                        // Null until the panel has been undocked once, which is
-                        // what tells module.js to seed a size and a corner.
-                        'float_x'      => $prefs->panel_float_x,
-                        'float_y'      => $prefs->panel_float_y,
-                        'float_width'  => $prefs->panel_float_width,
-                        'float_height' => $prefs->panel_float_height,
-                    ],
-                    // The panel decides Today/Yesterday itself, so it needs the
-                    // same timezone the server formatted the messages in.
-                    'timezone'     => $user->timezone ?: (config('app.timezone') ?: \App\User::DEFAULT_TIMEZONE),
-                ])->render();
-            } catch (\Exception $e) {
-                // A broken panel must never take down the conversation page.
-                \Helper::logException($e, '[AiChatPanel] Rendering the panel failed: ');
+            } elseif (!$user->can('view', $mailbox)) {
+                return;
             }
-        }, 20, 1);
+
+            $prefs = \Modules\AiChatPanel\Entities\UserPref::forUser($user->id);
+
+            $shortcuts = \Modules\AiChatPanel\Services\Settings::get('prompt_shortcuts', $mailbox);
+
+            if (!is_array($shortcuts)) {
+                $shortcuts = [];
+            }
+
+            // Let other modules contribute shortcuts. PanelContext reads
+            // the mailbox off the conversation, which on a fresh compose is
+            // the one the route named rather than one the model can load.
+            $conversation->setRelation('mailbox', $mailbox);
+
+            $context = new \Modules\AiChatPanel\Services\PanelContext($conversation, $user);
+            $shortcuts = \Eventy::filter('aichatpanel.prompt_shortcuts', $shortcuts, $context);
+
+            // Tells registerVendorScripts() to emit marked and DOMPurify.
+            // This hook fires inside @yield('content'), which the layout
+            // renders before @action('layout.body_bottom').
+            app()->instance(self::PANEL_RENDERED, true);
+
+            echo \View::make(AICHATPANEL_MODULE.'::panel', [
+                'conversation' => $conversation,
+                'compose'      => $compose,
+                'shortcuts'    => is_array($shortcuts) ? $shortcuts : [],
+                'prefs'        => [
+                    'open'  => (bool) $prefs->panel_open,
+                    'width' => (int) $prefs->panel_width,
+                    'mode'  => \Modules\AiChatPanel\Entities\UserPref::clampMode($prefs->panel_mode),
+                    // Null until the panel has been undocked once, which is
+                    // what tells module.js to seed a size and a corner.
+                    'float_x'      => $prefs->panel_float_x,
+                    'float_y'      => $prefs->panel_float_y,
+                    'float_width'  => $prefs->panel_float_width,
+                    'float_height' => $prefs->panel_float_height,
+                ],
+                // The panel decides Today/Yesterday itself, so it needs the
+                // same timezone the server formatted the messages in.
+                'timezone'     => $user->timezone ?: (config('app.timezone') ?: \App\User::DEFAULT_TIMEZONE),
+            ])->render();
+        } catch (\Exception $e) {
+            // A broken panel must never take down the conversation page.
+            \Helper::logException($e, '[AiChatPanel] Rendering the panel failed: ');
+        }
     }
 
     /**

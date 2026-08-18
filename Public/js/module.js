@@ -271,11 +271,22 @@
     // The panel
     // =====================================================================
 
+    // How long to wait for core to come back with a draft conversation, and how
+    // often to look. The request is one ajax round trip; the ceiling is there so
+    // a failed save reports itself rather than leaving a spinner running.
+    var DRAFT_POLL_MS    = 200;
+    var DRAFT_TIMEOUT_MS = 15000;
+
     var panel = {
         $el: null,
         $messages: null,
         $input: null,
         conversationId: null,
+        // Whether this is the compose screen (conversations/create.blade.php),
+        // which core also uses for a saved draft. There the conversation may
+        // not exist yet and there is no reply form to open or close — the
+        // editor is the page.
+        compose: false,
         // Olson id of the viewer's FreeScout profile timezone. Only used to
         // work out which calendar day "now" falls in; stored timestamps are
         // already formatted server-side.
@@ -326,7 +337,8 @@
         panel.$el = $el;
         panel.$messages = $el.find('.aicp-messages');
         panel.$input = $el.find('.aicp-input');
-        panel.conversationId = $el.attr('data-conversation-id');
+        panel.compose = $el.attr('data-compose') === '1';
+        panel.conversationId = $el.attr('data-conversation-id') || readConversationId();
         panel.timezone = $el.attr('data-timezone') || '';
         panel.urls = {
             history: $el.attr('data-url-history'),
@@ -350,6 +362,11 @@
         bindConversationThreads();
         bindRealtimeUpdates();
 
+        if (panel.compose) {
+            moveComposeToggle();
+            watchForConversationId();
+        }
+
         // The stored preference belongs to the wide layout. Narrower viewports
         // start closed and are opened deliberately, from the toolbar button.
         panel.pref_open = $el.attr('data-open') === '1';
@@ -361,6 +378,167 @@
         // Seeds last_overlay, so the first resize does not report a transition
         // that never happened.
         applyLayoutMode();
+    }
+
+    // =====================================================================
+    // The compose screen
+    //
+    // A new mail has no conversation until core's own autosave writes one.
+    // saveDraft() posts save_draft, the server creates a STATE_DRAFT
+    // conversation, and main.js:4429 publishes the id it gets back on
+    // <body data-conversation_id> and in the form. When that mail is finally
+    // sent, send_reply reuses the very same conversation rather than making a
+    // new one (ConversationsController.php:711, :982) — so a chat keyed on the
+    // draft id is still there afterwards, with nothing to migrate.
+    // =====================================================================
+
+    /**
+     * The conversation id as the page currently knows it.
+     *
+     * <body> is where core publishes it; the hidden input is the same value one
+     * step earlier, and is what a page rendered for an existing draft carries
+     * from the start.
+     */
+    function readConversationId() {
+        var id = $('body').attr('data-conversation_id');
+
+        if (!id) {
+            id = $('#form-create :input[name="conversation_id"]').val();
+        }
+
+        return id ? String(id) : '';
+    }
+
+    /**
+     * Take up an id that did not exist when the panel was rendered.
+     */
+    function adoptConversationId(id) {
+        id = id ? String(id) : '';
+
+        if (!id || id === panel.conversationId) {
+            return;
+        }
+
+        panel.conversationId = id;
+        panel.$el.attr('data-conversation-id', id);
+
+        // Could not be subscribed to while the conversation did not exist.
+        bindRealtimeUpdates();
+
+        // Fills the model picker and the tool hint, which the panel could not
+        // ask for either.
+        if (!panel.loaded && $('body').hasClass('aicp-open')) {
+            loadHistory();
+        }
+    }
+
+    /**
+     * Notice the id appearing. Core fires no JavaScript action after a draft is
+     * saved, and its autosave runs on a timer of its own, so watch the
+     * attribute it writes rather than poll for it.
+     */
+    function watchForConversationId() {
+        if (panel.conversationId || typeof MutationObserver === 'undefined') {
+            return;
+        }
+
+        var observer = new MutationObserver(function () {
+            var id = readConversationId();
+
+            if (id) {
+                observer.disconnect();
+                adoptConversationId(id);
+            }
+        });
+
+        observer.observe(document.body, {
+            attributes: true,
+            attributeFilter: ['data-conversation_id']
+        });
+    }
+
+    /**
+     * Ask core to save the draft, so that a conversation exists.
+     *
+     * Creating one here instead would mean reimplementing customer creation,
+     * the Drafts folder and the draft thread, and then keeping all three in
+     * step with core.
+     *
+     * saveDraft() refuses an unchanged new conversation (main.js:4393), hence
+     * fs_reply_changed. Its third argument is what makes it also refuse a form
+     * with no recipient, body or attachment (main.js:4372): pass it while the
+     * user has only opened the panel, and leave it off once they have actually
+     * asked something — by then a draft is what they want.
+     */
+    function requestDraft(force) {
+        if (typeof saveDraft !== 'function') {
+            return false;
+        }
+
+        if (force) {
+            window.fs_reply_changed = true;
+            saveDraft(false, true);
+        } else {
+            saveDraft(false, true, true);
+        }
+
+        return true;
+    }
+
+    /**
+     * Run done(id) once there is a conversation to talk about, or done('') if
+     * one could not be made.
+     */
+    function ensureConversation(done) {
+        var id = panel.conversationId || readConversationId();
+
+        if (id) {
+            adoptConversationId(id);
+            done(id);
+            return;
+        }
+
+        if (!requestDraft(true)) {
+            done('');
+            return;
+        }
+
+        var waited = 0;
+
+        var timer = setInterval(function () {
+            var found = readConversationId();
+            waited += DRAFT_POLL_MS;
+
+            if (!found && waited < DRAFT_TIMEOUT_MS) {
+                return;
+            }
+
+            clearInterval(timer);
+
+            if (found) {
+                adoptConversationId(found);
+            }
+
+            done(found);
+        }, DRAFT_POLL_MS);
+    }
+
+    /**
+     * Put the toggle in the toolbar.
+     *
+     * The compose screen never calls ConversationActionButtons, so the button
+     * comes rendered next to the panel and is moved here. Its click handler is
+     * delegated from document, so moving it changes nothing.
+     */
+    function moveComposeToggle() {
+        var $toggle = $('#aicp-compose-toggle');
+        var $actions = $('#conv-toolbar .conv-actions:first');
+
+        if ($toggle.length && $actions.length) {
+            $toggle.appendTo($actions).removeClass('aicp-unplaced');
+        } else {
+            $toggle.remove();
+        }
     }
 
     function bindPanel() {
@@ -493,8 +671,16 @@
             savePrefs({panel_open: 1});
         }
 
-        if (!panel.loaded) {
+        if (!panel.loaded && panel.conversationId) {
             loadHistory();
+        } else if (!panel.conversationId) {
+            // Nothing to load yet. Nudge core into saving the draft, which it
+            // will do if the agent has already named a recipient or typed
+            // something — that way the model picker is populated by the time
+            // they finish writing their first question. If the form is still
+            // empty this does nothing, and the conversation is created on the
+            // first message instead.
+            requestDraft(false);
         }
 
         panel.$input.focus();
@@ -1174,6 +1360,26 @@
             return;
         }
 
+        // Composing a new mail: there is nothing to key the chat to until the
+        // draft conversation exists. Leave the question in the box — if this
+        // fails, the agent should not have to retype it.
+        if (!panel.conversationId) {
+            setBusy(true);
+
+            ensureConversation(function (id) {
+                setBusy(false);
+
+                if (!id) {
+                    showPanelError(t('draft_failed', 'Could not start a conversation for this chat. Try saving the draft first.'));
+                    return;
+                }
+
+                sendMessage();
+            });
+
+            return;
+        }
+
         panel.$input.val('');
         appendMessage({role: 'user', body: text, echo: true});
         clearNotices();
@@ -1783,10 +1989,16 @@
         if ($.trim(message.body || '')) {
             html += '<div class="aicp-message-actions">'
                 + '<button type="button" class="btn btn-link btn-xs aicp-action-reply" title="' + escapeAttr(t('insert_reply', 'Insert into reply')) + '">'
-                + '<i class="glyphicon glyphicon-share-alt"></i> ' + escapeHtml(t('insert_reply_short', 'Reply')) + '</button>'
-                + '<button type="button" class="btn btn-link btn-xs aicp-action-note" title="' + escapeAttr(t('insert_note', 'Insert as internal note')) + '">'
-                + '<i class="glyphicon glyphicon-edit"></i> ' + escapeHtml(t('insert_note_short', 'Note')) + '</button>'
-                + '<button type="button" class="btn btn-link btn-xs aicp-action-copy" title="' + escapeAttr(t('copy', 'Copy')) + '">'
+                + '<i class="glyphicon glyphicon-share-alt"></i> ' + escapeHtml(t('insert_reply_short', 'Reply')) + '</button>';
+
+            // A mail that has not been sent has nothing to annotate, and the
+            // compose form has no note mode to switch into.
+            if (!panel.compose) {
+                html += '<button type="button" class="btn btn-link btn-xs aicp-action-note" title="' + escapeAttr(t('insert_note', 'Insert as internal note')) + '">'
+                    + '<i class="glyphicon glyphicon-edit"></i> ' + escapeHtml(t('insert_note_short', 'Note')) + '</button>';
+            }
+
+            html += '<button type="button" class="btn btn-link btn-xs aicp-action-copy" title="' + escapeAttr(t('copy', 'Copy')) + '">'
                 + '<i class="glyphicon glyphicon-duplicate"></i> ' + escapeHtml(t('copy', 'Copy')) + '</button>'
                 + '</div>';
         }
@@ -2375,7 +2587,11 @@
 
         var $block = $('.conv-reply-block');
 
-        if (!$block.length || typeof showReplyForm !== 'function') {
+        // The compose screen has no reply block to open, close or switch: the
+        // editor is the page and it is always a reply. Everything below is the
+        // dance needed to get an existing conversation's form into the right
+        // mode, so skip straight to the insert.
+        if (!panel.compose && (!$block.length || typeof showReplyForm !== 'function')) {
             showFloatingAlert('error', t('no_editor', 'The reply editor is not available on this page.'));
             return;
         }
@@ -2383,7 +2599,9 @@
         var hidden = $block.hasClass('hidden');
         var mode = (typeof getReplyFormMode === 'function') ? getReplyFormMode() : '';
 
-        if (asNote) {
+        if (panel.compose) {
+            // Nothing to do: #body is already open and already a reply.
+        } else if (asNote) {
             if (hidden) {
                 // The note button opens the form in note mode.
                 $('.conv-add-note:first').click();
@@ -2451,7 +2669,9 @@
             return '';
         }
 
-        if ($('.conv-reply-block').hasClass('hidden')) {
+        // On the compose screen there is no reply block and the editor is
+        // always open; elsewhere a closed form holds nothing worth sending.
+        if (!panel.compose && $('.conv-reply-block').hasClass('hidden')) {
             return '';
         }
 
@@ -2488,7 +2708,11 @@
 
         // setReplyBody() does not mark the form dirty, and the autosaver bails
         // on a form it thinks is unchanged.
-        $(".conv-reply-block :input[name='body']:first").val(next);
+        if (panel.compose) {
+            $("#form-create :input[name='body']:first").val(next);
+        } else {
+            $(".conv-reply-block :input[name='body']:first").val(next);
+        }
 
         if (typeof onReplyChange === 'function') {
             onReplyChange();

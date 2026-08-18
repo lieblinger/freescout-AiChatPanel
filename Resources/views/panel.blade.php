@@ -4,12 +4,30 @@
     resizable panel cannot live in. module.js moves this element to <body> on
     init, where it becomes position:fixed.
 
+    On the compose screen it is rendered by new_conversation_form.after instead,
+    and there is no conversation id yet: core creates the draft conversation
+    from its own autosave and module.js adopts the id when it appears.
+
     Everything the panel needs travels as data- attributes. No inline script:
     the CSP is script-src 'self'.
 --}}
+@if (!empty($compose))
+    {{--
+        The compose screen never calls ConversationActionButtons, so the toolbar
+        toggle that view.blade.php gets from conversation.get_action_buttons has
+        no equivalent here. Render it alongside the panel and let module.js move
+        it into #conv-toolbar: the only toolbar hook on that page sits inside the
+        email/phone .btn-group, where a third button reads as a third mode.
+    --}}
+    <div class="btn-group aicp-toolbar-group aicp-unplaced" id="aicp-compose-toggle">
+        <button type="button" class="btn btn-default aicp-toggle" title="{{ __('AI Chat') }}"><i class="glyphicon glyphicon-comment"></i></button>
+    </div>
+@endif
+
 <div id="aicp-panel"
      class="aicp-panel"
-     data-conversation-id="{{ $conversation->id }}"
+     data-conversation-id="{{ $conversation->id ?: '' }}"
+     data-compose="{{ !empty($compose) ? '1' : '0' }}"
      data-mailbox-id="{{ $conversation->mailbox_id }}"
      data-open="{{ $prefs['open'] ? '1' : '0' }}"
      data-width="{{ $prefs['width'] }}"

@@ -169,7 +169,15 @@ class ContextBuilder
         $lines[] = '- Your reply goes to the agent in the chat panel, and that is where the answer belongs. Summaries, explanations, analyses, suggestions and answers to questions are written there and nowhere else.';
         $lines[] = '- A tool that changes the conversation is only for when the agent asks for that change. "Summarise this", "what is still open", "explain this" and the like are questions to answer in the chat — do not put the answer in a note, a draft or the status instead. If you think a change would help, say so and let the agent ask.';
         $lines[] = '- A message that is neither a question nor an instruction to you, but reads as something meant for the customer — an answer to what they asked, a decision, a date, a price — is probably the raw material of a reply. Say what you would draft from it, ask whether to go ahead, then stop and wait for the answer. Offer every time, however obvious it looks: the same sentence can be material for the customer or context for you, and only the agent knows which.';
-        $lines[] = '- Once they say yes, write it out properly: follow the rules above and the language and tone set for this mailbox, keep every fact they gave you, add none they did not, and save it with conversation_create_draft_reply.';
+
+        if ($this->context->isUnsentDraft()) {
+            // No draft tool exists here: the mail being composed is the draft,
+            // and the agent puts the answer into it themselves.
+            $lines[] = '- Once they say yes, write it out properly: follow the rules above and the language and tone set for this mailbox, keep every fact they gave you, add none they did not, and write it in the chat. The agent inserts it into the mail they are writing.';
+        } else {
+            $lines[] = '- Once they say yes, write it out properly: follow the rules above and the language and tone set for this mailbox, keep every fact they gave you, add none they did not, and save it with conversation_create_draft_reply.';
+        }
+
         $lines[] = '- Be concise and concrete. Prefer the facts in the conversation over general advice.';
         $lines[] = '- If the conversation does not contain enough information to answer, say so plainly instead of inventing details.';
         $lines[] = '- Never invent order numbers, prices, dates, policies or names. If you need a fact you do not have, say what is missing.';
@@ -199,29 +207,45 @@ class ContextBuilder
         // conversation_get_drafts, because this system message is built once per
         // request and would be stale the moment the model edited a draft.
         $lines[] = '';
-        $lines[] = 'Drafts:';
 
-        if (count($this->drafts())) {
-            $lines[] = '- This conversation has unsent draft(s), listed under "Unsent drafts" below. Nobody has received them.';
-            $lines[] = '- To read a draft, call conversation_get_drafts. Do not answer from the draft text in this chat: it may already have been changed.';
-            $lines[] = '- While a draft exists, change it with conversation_update_draft and its thread id rather than creating a second one.';
-        } else {
-            $lines[] = '- This conversation has no draft right now, whatever earlier messages in this chat say: one written before may since have been sent or discarded.';
-            $lines[] = '- If the agent asks you to prepare a reply, call conversation_create_draft_reply. Do not tell them a draft already exists.';
-        }
-
-        // An empty conversation is where invention has the most room: there is
-        // no thread block, so nothing below contradicts a plausible-sounding
-        // sentence, and the model writes the letter it expects rather than the
-        // one the agent asked for. Say the emptiness out loud — silence reads
-        // as "nothing worth mentioning", not as "you know nothing here".
-        if (!$this->context->conversation->threads()->count()) {
-            $lines[] = '';
-            $lines[] = 'This conversation is empty:';
-            $lines[] = '- Nothing has been sent to the customer and nothing has been received from them. There is no history below because there is none.';
-            $lines[] = '- So everything you know about it is what the agent types in this chat. Write that and nothing else.';
+        if ($this->context->isUnsentDraft()) {
+            // A mail being composed is a draft conversation with exactly one
+            // draft thread in it, so the ordinary drafts wording would tell the
+            // model to fetch and rewrite with a tool the very text that is
+            // already in front of it as the editor body. Worse, the tools that
+            // wording names are withheld in this state.
+            $lines[] = 'This mail has not been sent:';
+            $lines[] = '- The agent is composing a new mail. Nothing has been sent to the customer and nothing has been received from them, so there is no history to draw on and no draft to fetch.';
+            $lines[] = '- What they have written so far is given below as the editor contents. That is the mail in progress: revise it there, and never call a draft tool for it.';
+            $lines[] = '- Everything you know about this mail is what the agent types in this chat. Write that and nothing else.';
             $lines[] = '- Do not add a reason, a background, a thank-you for something received, a promise about what happens next, a date, an amount or a next step unless the agent gave it to you. A first mail that invents its own context is worse than a short one.';
             $lines[] = '- If what they gave you is too thin for the mail they asked for, write what you can and ask for the rest. Do not fill the gap yourself.';
+        } else {
+            $lines[] = 'Drafts:';
+
+            if (count($this->drafts())) {
+                $lines[] = '- This conversation has unsent draft(s), listed under "Unsent drafts" below. Nobody has received them.';
+                $lines[] = '- To read a draft, call conversation_get_drafts. Do not answer from the draft text in this chat: it may already have been changed.';
+                $lines[] = '- While a draft exists, change it with conversation_update_draft and its thread id rather than creating a second one.';
+            } else {
+                $lines[] = '- This conversation has no draft right now, whatever earlier messages in this chat say: one written before may since have been sent or discarded.';
+                $lines[] = '- If the agent asks you to prepare a reply, call conversation_create_draft_reply. Do not tell them a draft already exists.';
+            }
+
+            // An empty conversation is where invention has the most room: there
+            // is no thread block, so nothing below contradicts a
+            // plausible-sounding sentence, and the model writes the letter it
+            // expects rather than the one the agent asked for. Say the emptiness
+            // out loud — silence reads as "nothing worth mentioning", not as
+            // "you know nothing here".
+            if (!$this->context->conversation->threads()->count()) {
+                $lines[] = '';
+                $lines[] = 'This conversation is empty:';
+                $lines[] = '- Nothing has been sent to the customer and nothing has been received from them. There is no history below because there is none.';
+                $lines[] = '- So everything you know about it is what the agent types in this chat. Write that and nothing else.';
+                $lines[] = '- Do not add a reason, a background, a thank-you for something received, a promise about what happens next, a date, an amount or a next step unless the agent gave it to you. A first mail that invents its own context is worse than a short one.';
+                $lines[] = '- If what they gave you is too thin for the mail they asked for, write what you can and ask for the rest. Do not fill the gap yourself.';
+            }
         }
 
         $language = trim((string) $this->context->setting('reply_language'));
@@ -347,6 +371,14 @@ class ContextBuilder
      */
     protected function draftMarker()
     {
+        // A mail being composed is itself a draft thread on a draft
+        // conversation. Listing it here would invite the model to fetch and
+        // rewrite through a tool the same text it already has as the editor
+        // contents — and the draft tools are withheld while the mail is unsent.
+        if ($this->context->isUnsentDraft()) {
+            return '';
+        }
+
         $drafts = $this->drafts();
 
         if (!count($drafts)) {

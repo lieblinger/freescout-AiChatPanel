@@ -180,6 +180,7 @@
     "The endpoint did not report any models.": "Der Endpunkt hat keine Modelle gemeldet.",
     "Loaded :count model(s).": ":count Modell(e) geladen.",
     "Could not load the chat.": "Der Chat konnte nicht geladen werden.",
+    "Could not start a conversation for this chat. Try saving the draft first.": "Für diesen Chat konnte kein Gespräch angelegt werden. Speichern Sie zuerst den Entwurf.",
     "Could not start a new chat.": "Ein neuer Chat konnte nicht gestartet werden.",
     "The request failed (HTTP :code).": "Die Anfrage ist fehlgeschlagen (HTTP :code).",
     "The connection to the assistant was interrupted.": "Die Verbindung zum Assistenten wurde unterbrochen.",

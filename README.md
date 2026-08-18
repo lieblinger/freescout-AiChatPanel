@@ -24,6 +24,10 @@ Licence: **AGPL-3.0-or-later**.
   become unreadable — see [Responsive behaviour](#responsive-behaviour).
 - Multi-turn chat about the open conversation, with the full thread history,
   conversation metadata, customer details and attachment filenames as context.
+- **Also on a new mail.** The panel is on the New Conversation screen too, so a
+  mail can be written with the assistant from nothing — with the recipient's
+  earlier conversations available once you have named them. See
+  [Writing a new mail](#writing-a-new-mail).
 - Streaming responses, rendered as Markdown and sanitised.
 - **Markdown both ways.** Thread bodies reach the model as Markdown, so a list
   stays a list and a link keeps its target; everything the model writes back —
@@ -43,6 +47,25 @@ Licence: **AGPL-3.0-or-later**.
 - Chats are stored per conversation and per user, so reopening a conversation
   restores the whole exchange including tool calls.
 - English and German UI.
+
+### Writing a new mail
+
+FreeScout gives the compose form a conversation of its own: it saves what you
+have typed as a draft, and sending publishes that same conversation rather than
+making a second one. The chat is kept with it, which is why the exchange that
+produced a mail is still there when you reopen the ticket afterwards — and why
+discarding the draft takes the chat with it.
+
+The draft is created the moment you send your first message to the assistant, so
+asking it something puts a conversation in the Drafts folder. Typing anything
+into the form does the same a few seconds later; the panel only brings it
+forward.
+
+Until the mail is sent the assistant answers in the chat and you insert what you
+want into the editor. The tools that save a draft reply, rewrite a draft, add a
+note or set a status are not offered: the mail is the thing you are editing, and
+there is no history for a note or a status to belong to. Everything read-only
+stays — the clock, the customer, their previous conversations.
 
 ### Docked or floating
 

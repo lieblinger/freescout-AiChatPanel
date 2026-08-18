@@ -72,6 +72,17 @@ class SetStatusTool extends AbstractTool
     }
 
     /**
+     * A mail being composed has no status worth changing — it is a draft until
+     * it is sent, and sending is what decides what it becomes.
+     *
+     * {@inheritdoc}
+     */
+    public function isRelevant(PanelContext $context)
+    {
+        return !$context->isUnsentDraft();
+    }
+
+    /**
      * {@inheritdoc}
      */
     public function confirmationLabel(array $arguments, PanelContext $context)

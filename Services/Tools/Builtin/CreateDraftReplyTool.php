@@ -96,6 +96,13 @@ class CreateDraftReplyTool extends AbstractTool
      */
     public function isRelevant(PanelContext $context)
     {
+        // A mail that has not been sent has nothing to reply to, and the text
+        // the agent is composing is already in front of the model as the editor
+        // contents — answer there instead of saving a draft inside a draft.
+        if ($context->isUnsentDraft()) {
+            return false;
+        }
+
         // Without a customer there is nobody to address the draft to.
         return (bool) $context->customer;
     }
