@@ -29,6 +29,20 @@ abstract class AiChatPanelTestCase extends TestCase
      */
     use DatabaseTransactions;
 
+    /**
+     * Serial number for fixture emails.
+     *
+     * Three users are created per test, and faker draws their addresses from a
+     * pool small enough that a suite of this size collides on users.email
+     * sooner or later — as a duplicate-key error in whichever test happened to
+     * draw second, never the one at fault. Numbering them removes the
+     * collision, and with it a failure that scaled with the number of tests
+     * rather than with anything they assert.
+     *
+     * @var int
+     */
+    protected static $fixture_serial = 0;
+
     /** @var User */
     protected $admin;
 
@@ -68,9 +82,20 @@ abstract class AiChatPanelTestCase extends TestCase
 
         \Session::start();
 
-        $this->admin = factory(User::class)->create(['role' => User::ROLE_ADMIN]);
-        $this->agent = factory(User::class)->create(['role' => User::ROLE_USER]);
-        $this->outsider = factory(User::class)->create(['role' => User::ROLE_USER]);
+        $this->admin = factory(User::class)->create([
+            'role'  => User::ROLE_ADMIN,
+            'email' => $this->fixtureEmail('admin'),
+        ]);
+
+        $this->agent = factory(User::class)->create([
+            'role'  => User::ROLE_USER,
+            'email' => $this->fixtureEmail('agent'),
+        ]);
+
+        $this->outsider = factory(User::class)->create([
+            'role'  => User::ROLE_USER,
+            'email' => $this->fixtureEmail('outsider'),
+        ]);
 
         $this->mailbox = factory(Mailbox::class)->create();
         $this->mailbox->users()->sync([$this->agent->id]);
@@ -112,6 +137,20 @@ abstract class AiChatPanelTestCase extends TestCase
         \Option::$cache = [];
 
         parent::tearDown();
+    }
+
+    /**
+     * An address no other fixture can draw.
+     *
+     * @param string $role
+     *
+     * @return string
+     */
+    protected function fixtureEmail($role)
+    {
+        self::$fixture_serial++;
+
+        return 'aicp-'.$role.'-'.self::$fixture_serial.'@example.test';
     }
 
     /**
