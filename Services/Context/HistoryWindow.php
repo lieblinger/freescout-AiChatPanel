@@ -26,6 +26,12 @@ use Modules\AiChatPanel\Services\PanelContext;
  *    history with the pending assistant turn and its result, and splitting
  *    those would break the run it is trying to resume.
  *
+ *    Each group is repaired as it is closed rather than assumed to be sound —
+ *    see repair(). This is the last place a stored chat is looked at before it
+ *    goes on the wire, and a history that was already broken when it arrived
+ *    would otherwise take the whole request down with it, on every message,
+ *    forever.
+ *
  * 2. The newest group is kept whatever it costs. It is the question that was
  *    just asked — sending an empty history is worse than sending an oversized
  *    one, and the endpoint's own error is a better failure than a silent one.
@@ -44,6 +50,12 @@ class HistoryWindow
      * around it survives, so the exchange stays valid.
      */
     const ELIDED_RESULT = '[Result omitted: this chat was shortened to fit the context. Call the tool again if you still need it.]';
+
+    /**
+     * Stands in for a tool result that was never recorded at all, so the call
+     * above it still has an answer and the request stays valid.
+     */
+    const MISSING_RESULT = '[No result recorded for this call: it did not complete. Call the tool again if you still need it.]';
 
     /** Share of the history budget the rollup may occupy. */
     const ROLLUP_SHARE = 0.12;
@@ -243,17 +255,78 @@ class HistoryWindow
             }
 
             if ($current) {
-                $groups[] = $current;
+                $groups[] = $this->repair($current);
             }
 
             $current = [$message];
         }
 
         if ($current) {
-            $groups[] = $current;
+            $groups[] = $this->repair($current);
         }
 
         return $groups;
+    }
+
+    /**
+     * One group, made valid on its own terms.
+     *
+     * Every tool result answers a call the turn above it actually made, and
+     * every call it made has exactly one answer. Both halves are enforced, not
+     * trusted: the endpoint refuses the entire request over either, so a single
+     * missing row anywhere in a stored chat makes that chat permanently
+     * unusable — which is exactly what a dropped result did.
+     *
+     * A synthesised answer is a poor substitute for the real one, but the model
+     * can call the tool again, and the alternative is no request at all.
+     *
+     * @param array $group Head message first, its tool results after it.
+     *
+     * @return array
+     */
+    protected function repair(array $group)
+    {
+        $head = $group[0];
+        $called = [];
+
+        if (isset($head['role']) && $head['role'] === 'assistant' && !empty($head['tool_calls'])) {
+            foreach ($head['tool_calls'] as $call) {
+                if (isset($call['id'])) {
+                    $called[] = (string) $call['id'];
+                }
+            }
+        }
+
+        $repaired = [$head];
+        $answered = [];
+
+        foreach (array_slice($group, 1) as $message) {
+            $id = isset($message['tool_call_id']) ? (string) $message['tool_call_id'] : '';
+
+            // Nothing asked for this, or something already answered it. A
+            // group headed by a user message has $called empty, so results
+            // stranded by a dropped assistant turn go here too.
+            if (!in_array($id, $called, true) || in_array($id, $answered, true)) {
+                continue;
+            }
+
+            $answered[] = $id;
+            $repaired[] = $message;
+        }
+
+        foreach ($called as $id) {
+            if (in_array($id, $answered, true)) {
+                continue;
+            }
+
+            $repaired[] = [
+                'role'         => 'tool',
+                'tool_call_id' => $id,
+                'content'      => self::MISSING_RESULT,
+            ];
+        }
+
+        return $repaired;
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace Modules\AiChatPanel\Tests;
 
+use Modules\AiChatPanel\Entities\Chat;
 use Modules\AiChatPanel\Entities\Message;
 use Modules\AiChatPanel\Entities\ToolCall;
 use Modules\AiChatPanel\Services\Agent\AgentLoop;
@@ -221,6 +222,45 @@ class AgentLoopTest extends AiChatPanelTestCase
         $audit = ToolCall::where('tool', 'test.fail')->first();
         $this->assertNotNull($audit);
         $this->assertEquals(ToolCall::STATUS_FAILED, $audit->status);
+    }
+
+    /**
+     * A failed tool result is part of the transcript, not an error bubble.
+     *
+     * Rejection is only the loudest way to produce one: a tool that errors, a
+     * schema violation and an unknown tool name all store the same thing. Left
+     * out of the replay, each of them permanently wedged the chat it happened
+     * in — the assistant turn above it was still sent, with nothing answering
+     * its call.
+     */
+    public function testAFailedToolResultIsReplayedInTheNextRequest()
+    {
+        $client = (new FakeLlmClient())
+            ->queueToolCall('test.fail')
+            ->queueText('OK, nothing found.');
+
+        $outcome = $this->loop($client)->run($this->messages());
+
+        // Within the run the loop keeps the result in memory, so this much
+        // always worked.
+        $second = $client->payload(1)['messages'];
+        $this->assertEquals(['system', 'user', 'assistant', 'tool'], array_column($second, 'role'));
+
+        // What broke is the request after that, built from the stored rows.
+        $chat = Chat::findOrCreateFor($this->conversation->id, $this->agent->id);
+
+        foreach ($outcome->turns as $turn) {
+            Message::create(array_merge([
+                'chat_id' => $chat->id,
+                'status'  => Message::STATUS_OK,
+                'body'    => '',
+            ], $turn));
+        }
+
+        $stored = $chat->fresh()->toApiMessages();
+
+        $this->protocolIsValid($stored);
+        $this->assertStringContainsString('Nothing matched your query', $this->contentOf($stored));
     }
 
     public function testUnexpectedExceptionDoesNotLeakInternalsToTheModel()

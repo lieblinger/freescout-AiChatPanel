@@ -281,6 +281,59 @@ class HistoryWindowTest extends AiChatPanelTestCase
         );
     }
 
+    /**
+     * A history that arrives already broken is repaired rather than forwarded.
+     *
+     * It arrives that way for real: until 1.3.3 a tool result that failed — a
+     * rejected write, a tool that errored — was filtered out of the replay
+     * while the assistant turn that asked for it was kept, and every message
+     * sent in that chat afterwards came back as a 400. The rows in those chats
+     * are still whatever they are, so the window has to cope.
+     */
+    public function testAnUnansweredToolCallIsGivenAPlaceholderAnswer()
+    {
+        $history = [
+            $this->user('Save a draft reply.'),
+            $this->assistantCall('call-1', 'conversation_create_draft_reply', '{}'),
+            // Nothing answers it.
+            $this->user('Never mind, leave it.'),
+        ];
+
+        $window = (new HistoryWindow(4000))->apply($history);
+
+        $this->protocolIsValid($window['messages']);
+        $this->assertStringContainsString(HistoryWindow::MISSING_RESULT, $this->contentOf($window['messages']));
+    }
+
+    public function testAToolResultNothingAskedForIsDropped()
+    {
+        $history = [
+            $this->user('Hello.'),
+            $this->tool('call-ghost', 'a result for a call that is not here'),
+            $this->assistant('Hi.'),
+        ];
+
+        $window = (new HistoryWindow(4000))->apply($history);
+
+        $this->protocolIsValid($window['messages']);
+        $this->assertStringNotContainsString('call that is not here', $this->contentOf($window['messages']));
+    }
+
+    public function testAResultBelongingToAnEarlierTurnDoesNotCountAsAnAnswer()
+    {
+        // The dangerous shape: a result IS present, just not for this call. A
+        // check that only counted results would call this group answered.
+        $history = [
+            $this->assistantCall('call-1', 'conversation_get', '{}'),
+            $this->tool('call-0', 'the previous turn\'s result'),
+        ];
+
+        $window = (new HistoryWindow(4000))->apply($history);
+
+        $this->protocolIsValid($window['messages']);
+        $this->assertStringContainsString(HistoryWindow::MISSING_RESULT, $this->contentOf($window['messages']));
+    }
+
     public function testTheShareIsClampedSoABadConfigCannotStarveEitherSide()
     {
         \Config::set(AICHATPANEL_MODULE.'.history_token_share', 0);
@@ -294,63 +347,6 @@ class HistoryWindowTest extends AiChatPanelTestCase
     }
 
     // -----------------------------------------------------------------------
-
-    /**
-     * The invariant the endpoint enforces: every tool result answers a call
-     * that is present, and every call present has an answer.
-     *
-     * @param array  $messages
-     * @param string $context
-     *
-     * @return void
-     */
-    protected function protocolIsValid(array $messages, $context = '')
-    {
-        $where = $context ? ' ('.$context.')' : '';
-
-        $called = [];
-        $answered = [];
-
-        foreach ($messages as $message) {
-            if ($message['role'] === 'assistant' && !empty($message['tool_calls'])) {
-                foreach ($message['tool_calls'] as $call) {
-                    $called[] = $call['id'];
-                }
-            }
-
-            if ($message['role'] === 'tool') {
-                $answered[] = $message['tool_call_id'];
-            }
-        }
-
-        $this->assertEquals(
-            [],
-            array_values(array_diff($answered, $called)),
-            'orphaned tool result: no assistant turn asked for it'.$where
-        );
-
-        $this->assertEquals(
-            [],
-            array_values(array_diff($called, $answered)),
-            'unanswered tool call: the endpoint rejects the whole request'.$where
-        );
-    }
-
-    /**
-     * @param array $messages
-     *
-     * @return string
-     */
-    protected function contentOf(array $messages)
-    {
-        $text = '';
-
-        foreach ($messages as $message) {
-            $text .= (isset($message['content']) ? $message['content'] : '')."\n";
-        }
-
-        return $text;
-    }
 
     /**
      * @return array

@@ -230,4 +230,68 @@ abstract class AiChatPanelTestCase extends TestCase
 
         return $thread;
     }
+
+    /**
+     * Everything a message list says, for a substring assertion.
+     *
+     * @param array $messages
+     *
+     * @return string
+     */
+    protected function contentOf(array $messages)
+    {
+        $text = '';
+
+        foreach ($messages as $message) {
+            $text .= (isset($message['content']) ? $message['content'] : '')."\n";
+        }
+
+        return $text;
+    }
+
+    /**
+     * The invariant the endpoint enforces: every tool result answers a call
+     * that is present, and every call present has an answer.
+     *
+     * Shared rather than local to one suite because it is the thing that
+     * breaks. Anything that produces or filters a message list — the window,
+     * the stored chat, the loop — has to satisfy it, and a request that does
+     * not is refused whole, so the chat that carries it is finished.
+     *
+     * @param array  $messages
+     * @param string $context
+     *
+     * @return void
+     */
+    protected function protocolIsValid(array $messages, $context = '')
+    {
+        $where = $context ? ' ('.$context.')' : '';
+
+        $called = [];
+        $answered = [];
+
+        foreach ($messages as $message) {
+            if ($message['role'] === 'assistant' && !empty($message['tool_calls'])) {
+                foreach ($message['tool_calls'] as $call) {
+                    $called[] = $call['id'];
+                }
+            }
+
+            if ($message['role'] === 'tool') {
+                $answered[] = $message['tool_call_id'];
+            }
+        }
+
+        $this->assertEquals(
+            [],
+            array_values(array_diff($answered, $called)),
+            'orphaned tool result: no assistant turn asked for it'.$where
+        );
+
+        $this->assertEquals(
+            [],
+            array_values(array_diff($called, $answered)),
+            'unanswered tool call: the endpoint rejects the whole request'.$where
+        );
+    }
 }

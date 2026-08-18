@@ -52,14 +52,26 @@ class Message extends Model
     /**
      * Shape this turn the way /v1/chat/completions expects it.
      *
-     * Returns null for turns that must not be replayed — an error bubble, or an
-     * assistant turn still waiting on a write confirmation.
+     * Returns null for turns that must not be replayed: an error bubble — the
+     * row written when the endpoint itself failed, which the model never
+     * produced and would only be confused by.
+     *
+     * A failed TOOL result is not one of those and is always replayed. Its
+     * STATUS_ERROR is what paints the activity row red in the panel; the model
+     * still has to be told that the tool it asked for did not work, and the
+     * endpoint requires every tool_call id in the assistant turn above to be
+     * answered before the next completion. Dropping it left an unanswered
+     * tool_call in the history and every later message in that chat came back
+     * as a 400.
+     *
+     * STATUS_PENDING is replayed too, and has to be: confirm() resumes the run
+     * by sending exactly that turn with the result of the write beneath it.
      *
      * @return array|null
      */
     public function toApiMessage()
     {
-        if ($this->status == self::STATUS_ERROR) {
+        if ($this->status == self::STATUS_ERROR && $this->role != self::ROLE_TOOL) {
             return null;
         }
 

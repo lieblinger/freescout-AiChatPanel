@@ -4,6 +4,10 @@ Newest first. No release so far has removed a setting or changed an endpoint.
 1.3.1 is the first to require a migration; it rewrites stored chat history and
 runs with the module's other migrations.
 
+## 1.3.3
+
+* Fix - Turning down an action the assistant suggested no longer ends the chat. Rejecting a suggested draft reply, note or status change left the endpoint with a question it had asked and no answer to it, so that message and every one after it in the same chat came back as "The AI endpoint returned an error (400)". The same thing happened whenever a tool failed for any other reason — a lookup that found nothing, a bad argument — and the chat stayed broken from then on. It is now told what happened, as it always should have been, and any chat already stuck this way repairs itself the next time you write in it.
+
 ## 1.3.2
 
 * New - The chat works while a new mail is being written, not only on a conversation that already exists. Open it from the toolbar on the New Conversation screen, ask for the mail you want, and insert the answer into the editor. If the recipient is someone you have written to before, their earlier conversations are available to the assistant the same way they are on an existing ticket.

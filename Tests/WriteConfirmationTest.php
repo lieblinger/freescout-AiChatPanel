@@ -8,6 +8,7 @@ use Modules\AiChatPanel\Entities\Message;
 use Modules\AiChatPanel\Entities\ToolCall;
 use Modules\AiChatPanel\Services\Agent\AgentLoop;
 use Modules\AiChatPanel\Services\Agent\AgentOutcome;
+use Modules\AiChatPanel\Services\Context\HistoryWindow;
 use Modules\AiChatPanel\Services\Llm\FakeLlmClient;
 use Modules\AiChatPanel\Services\Tools\ToolRegistry;
 use Modules\AiChatPanel\Tests\Support\EchoTool;
@@ -237,6 +238,42 @@ class WriteConfirmationTest extends AiChatPanelTestCase
         $tool_message = Message::where('tool_call_id', 'call_pending')->first();
         $this->assertNotNull($tool_message);
         $this->assertStringContainsString('rejected', $tool_message->body);
+    }
+
+    /**
+     * Turning a write down must not end the chat.
+     *
+     * The rejection is stored as a failed result, and a failed result used to
+     * be dropped on the way back to the endpoint — leaving the assistant turn
+     * that asked for the write with nothing answering it. Bedrock's words for
+     * that were "`tool_use` ids were found without `tool_result` blocks
+     * immediately after"; it refuses the whole request, so every later message
+     * in that chat failed too, not just the one after the rejection.
+     */
+    public function testARejectedWriteLeavesAHistoryTheEndpointAccepts()
+    {
+        $chat = $this->chatAwaitingWrite();
+
+        $this->actingAs($this->agent)->csrfPost('/aichatpanel/chat/confirm', [
+            'conversation_id' => $this->conversation->id,
+            'tool_call_id'    => 'call_pending',
+            'approved'        => 0,
+        ]);
+
+        $messages = $chat->fresh()->toApiMessages();
+
+        $this->protocolIsValid($messages, 'stored chat');
+
+        $answer = end($messages);
+
+        $this->assertEquals('tool', $answer['role']);
+        $this->assertEquals('call_pending', $answer['tool_call_id']);
+        $this->assertStringContainsString('rejected', $answer['content']);
+
+        // And through the window, which is what actually goes on the wire.
+        $window = HistoryWindow::forContext($this->context())->apply($messages);
+
+        $this->protocolIsValid($window['messages'], 'windowed');
     }
 
     public function testApprovingAWriteExecutesItWithTheStoredArguments()
