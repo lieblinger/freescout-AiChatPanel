@@ -308,6 +308,13 @@
         // The floating window's box, {x, y, w, h}. Null until the panel has
         // been undocked once, which is seedFloat()'s cue.
         float: null,
+        // Whether the list follows new content. Cleared when the reader scrolls
+        // up, re-armed only by things they did on purpose — sending, a new
+        // chat, opening the panel, clicking the jump button. Everything the
+        // model produces goes through scrollToBottom(), which respects it.
+        stick: true,
+        // Entries that landed while detached — the number on the jump badge.
+        missed: 0,
         loaded: false,
         busy: false,
         request: null,
@@ -551,6 +558,25 @@
 
         $(window).on('scroll resize', scheduleBoundsUpdate);
 
+        // The reader's own scrolling is what decides whether the list follows
+        // new content. Programmatic jumps are instant, so by the time this runs
+        // for one of those the list is at the bottom and it re-arms itself —
+        // which is why the jump is not smooth-scrolled.
+        panel.$messages.on('scroll', function () {
+            panel.stick = isAtBottom();
+
+            if (panel.stick) {
+                panel.missed = 0;
+            }
+
+            updateJumpButton();
+        });
+
+        panel.$el.on('click', '.aicp-jump', function (e) {
+            e.preventDefault();
+            jumpToBottom();
+        });
+
         panel.$el.find('.aicp-close').on('click', function (e) {
             e.preventDefault();
             closePanel();
@@ -670,6 +696,12 @@
             panel.pref_open = true;
             savePrefs({panel_open: 1});
         }
+
+        // Now that the panel has layout, land on the newest message. scrollTop
+        // on a display:none element is a no-op, so a panel reopened with its
+        // history already loaded used to come back wherever the browser had
+        // left it rather than at the bottom.
+        jumpToBottom();
 
         if (!panel.loaded && panel.conversationId) {
             loadHistory();
@@ -793,6 +825,10 @@
 
         style.setProperty('--aicp-top', Math.max(0, navbar_height - scrolled) + 'px');
         style.setProperty('--aicp-bottom', bottom + 'px');
+
+        // The panel just changed height, so the list may have stopped being
+        // scrollable — in which case there is nothing to jump to.
+        updateJumpButton();
     }
 
     /**
@@ -1031,6 +1067,10 @@
         style.setProperty('--aicp-float-y', box.y + 'px');
         style.setProperty('--aicp-float-w', box.w + 'px');
         style.setProperty('--aicp-float-h', box.h + 'px');
+
+        // Same reason as in updatePanelBounds(): a window dragged taller can
+        // leave the list with nothing left to scroll.
+        updateJumpButton();
     }
 
     /**
@@ -1381,6 +1421,13 @@
         }
 
         panel.$input.val('');
+
+        // Sending is a deliberate "take me to the newest": follow the list
+        // again even if the reader had scrolled up to check something first.
+        // It also means countMissed() is a no-op for your own echo.
+        panel.stick = true;
+        panel.missed = 0;
+
         appendMessage({role: 'user', body: text, echo: true});
         clearNotices();
         setBusy(true);
@@ -1843,10 +1890,16 @@
         if (replace) {
             panel.$messages.empty();
             panel.lastDayKey = null;
+
+            // A replaced list is a new list: the history load and a new chat.
+            // Nothing that was scrolled away from is still on screen.
+            panel.stick = true;
+            panel.missed = 0;
         }
 
         if (replace && (!messages || !messages.length)) {
             panel.$messages.html(emptyState());
+            updateJumpButton();
             return;
         }
 
@@ -1903,6 +1956,7 @@
             panel.$messages.append(html);
         }
 
+        countMissed();
         scrollToBottom();
     }
 
@@ -2219,6 +2273,7 @@
             + '<i class="glyphicon glyphicon-exclamation-sign"></i> ' + escapeHtml(message)
             + '</div></div>'
         );
+        countMissed();
         scrollToBottom();
     }
 
@@ -2238,8 +2293,80 @@
         return t('http_error', 'The request failed (HTTP :code).', {code: xhr ? xhr.status : 0});
     }
 
+    // ---------------------------------------------------------------------
+    // Scroll anchoring
+    //
+    // The list follows new content only while the reader is already at the
+    // bottom of it. Streaming appends on every token that arrives, so an
+    // unconditional scroll made re-reading an earlier answer mid-turn
+    // impossible: the view snapped back a few times a second.
+    // ---------------------------------------------------------------------
+
+    function isAtBottom() {
+        var el = panel.$messages[0];
+
+        // 32px of slack: fractional device pixels mean scrollTop rarely lands
+        // exactly on scrollHeight - clientHeight, and a bubble growing by one
+        // line mid-stream must not read as "the reader scrolled away".
+        return el.scrollHeight - el.scrollTop - el.clientHeight <= 32;
+    }
+
+    function isScrollable() {
+        var el = panel.$messages[0];
+
+        return el.scrollHeight > el.clientHeight + 4;
+    }
+
+    /**
+     * Follow the newest content — but only if the reader has not scrolled away.
+     */
     function scrollToBottom() {
+        if (!panel.stick) {
+            // The content grew while detached, so the button may be newly due.
+            updateJumpButton();
+            return;
+        }
+
         panel.$messages.scrollTop(panel.$messages[0].scrollHeight);
+        updateJumpButton();
+    }
+
+    /**
+     * Re-arm and go. For the things the reader did on purpose.
+     */
+    function jumpToBottom() {
+        panel.stick = true;
+        panel.missed = 0;
+        scrollToBottom();
+    }
+
+    /**
+     * One more entry the reader has not seen.
+     *
+     * Never called for the streaming bubble: that is a single entry being
+     * written, and `done` discards it and appends the finished message through
+     * appendMessage(). Counting both would count the same turn twice.
+     */
+    function countMissed() {
+        if (!panel.stick) {
+            panel.missed++;
+        }
+    }
+
+    function updateJumpButton() {
+        // updatePanelBounds() and applyFloat() both reach here, and both can run
+        // on a page whose panel never initialised.
+        if (!panel.$el || !panel.$messages) {
+            return;
+        }
+
+        var $button = panel.$el.find('.aicp-jump');
+        var $count = $button.find('.aicp-jump-count');
+
+        $button.toggleClass('hidden', panel.stick || !isScrollable());
+        $count
+            .toggleClass('hidden', panel.missed < 1)
+            .text(panel.missed > 99 ? '99+' : panel.missed);
     }
 
     // ---------------------------------------------------------------------
@@ -2278,6 +2405,10 @@
             + '</div>'
         );
 
+        // A pending approval does not force the view down either — but it does
+        // count, so the badge says there is something waiting rather than
+        // leaving it silently off screen.
+        countMissed();
         scrollToBottom();
     }
 

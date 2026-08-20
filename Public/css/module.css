@@ -362,11 +362,55 @@ body.aicp-floating .aicp-fresize {
    Message list
    =================================================================== */
 
+/* Wraps the list so .aicp-jump has a containing block that ends at the bottom
+   of the list rather than at the bottom of the panel. */
+.aicp-messages-wrap {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    /* min-height:0 or the wrapper refuses to shrink below its content: the list
+       stops scrolling and grows the panel past the composer instead. A flex
+       item's default min-height is auto, which is the whole trap. */
+    min-height: 0;
+    position: relative;
+}
+
 .aicp-messages {
     flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
     padding: 12px 10px;
+}
+
+/* Back to the newest message, shown only while the reader has scrolled away
+   from the bottom. A circle with just the chevron; a pill once the badge has a
+   number in it.
+
+   Scoped through the wrapper on purpose. The module's stylesheet is pushed onto
+   the `stylesheets` filter, and core puts that list BEFORE bootstrap.css and
+   style.css — so a bare .aicp-jump loses every property .btn also sets, at equal
+   specificity, on source order alone. It cost this rule its border-radius (2px
+   instead of a pill) and its padding. Two classes beat .btn whatever the order
+   is. */
+.aicp-messages-wrap .aicp-jump {
+    position: absolute;
+    left: 50%;
+    bottom: 10px;
+    transform: translateX(-50%);
+    z-index: 2;   /* the layer .aicp-resizer already uses */
+    height: 30px;
+    min-width: 30px;
+    padding: 0 8px;
+    border-radius: 15px;
+    line-height: 28px;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .25);
+    white-space: nowrap;
+}
+
+.aicp-messages-wrap .aicp-jump-count {
+    margin-left: 4px;
 }
 
 .aicp-empty {

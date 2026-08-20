@@ -94,11 +94,32 @@
 
     <div class="aicp-notices"></div>
 
-    <div class="aicp-messages" tabindex="0">
-        <div class="aicp-empty">
-            <p>{{ __('Ask about this conversation, or pick one of the shortcuts below.') }}</p>
-            <p class="aicp-empty-hint">{{ __('Nothing you write here is sent to the customer. Drafts are inserted into the reply editor for you to review.') }}</p>
+    {{--
+        The wrapper exists so the jump button has a containing block that ends
+        at the bottom of the list rather than at the bottom of the panel: the
+        shortcut strip and the composer below it are both of variable height.
+    --}}
+    <div class="aicp-messages-wrap">
+        <div class="aicp-messages" tabindex="0">
+            <div class="aicp-empty">
+                <p>{{ __('Ask about this conversation, or pick one of the shortcuts below.') }}</p>
+                <p class="aicp-empty-hint">{{ __('Nothing you write here is sent to the customer. Drafts are inserted into the reply editor for you to review.') }}</p>
+            </div>
         </div>
+
+        {{--
+            Unhidden by updateJumpButton() once the reader has scrolled away
+            from the bottom. The badge counts the entries that arrived while
+            they were away; its number is the only dynamic part, so nothing here
+            needs a JsStrings key.
+        --}}
+        <button type="button"
+                class="btn btn-default aicp-jump hidden"
+                title="{{ __('Jump to the newest message') }}"
+                aria-label="{{ __('Jump to the newest message') }}">
+            <i class="glyphicon glyphicon-chevron-down"></i>
+            <span class="badge aicp-jump-count hidden" aria-live="polite"></span>
+        </button>
     </div>
 
     {{--

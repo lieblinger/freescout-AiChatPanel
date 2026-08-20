@@ -4,6 +4,12 @@ Newest first. No release so far has removed a setting or changed an endpoint.
 1.3.1 is the first to require a migration; it rewrites stored chat history and
 runs with the module's other migrations.
 
+## 1.3.4
+
+* Fix - Scrolling back through a chat while the assistant is writing works. The message list was pinned to the bottom on every token that arrived, so trying to re-read an earlier answer mid-answer pulled the view back down a few times a second, and again the moment the turn finished. It now follows new messages only when you are already at the bottom of the list; scroll up and your position is left alone.
+* New - A button to get back to the newest message, over the bottom of the list whenever you have scrolled away from it. It carries a count of what arrived while you were reading further up — tool activity, the answer itself, and a pending confirmation, which no longer waits for you off screen unannounced. Pressing it returns to the bottom and resumes following.
+* Fix - Reopening the panel lands on the newest message rather than wherever the browser happened to leave it.
+
 ## 1.3.3
 
 * Fix - Turning down an action the assistant suggested no longer ends the chat. Rejecting a suggested draft reply, note or status change left the endpoint with a question it had asked and no answer to it, so that message and every one after it in the same chat came back as "The AI endpoint returned an error (400)". The same thing happened whenever a tool failed for any other reason — a lookup that found nothing, a bad argument — and the chat stayed broken from then on. It is now told what happened, as it always should have been, and any chat already stuck this way repairs itself the next time you write in it.

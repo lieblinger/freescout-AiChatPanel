@@ -181,34 +181,51 @@ FROM aichatpanel_tool_calls ORDER BY id DESC LIMIT 10;
 Every attempt is there, including the rejected one (`status = 4`) and any that
 were blocked (`status = 5`).
 
+### Reading while the model writes
+
+Needs a chat long enough to overflow the panel — steps 1–21 leave you with one.
+
+22. Scroll the message list up. A round chevron button appears over the bottom
+    of the list; scroll back down and it goes away again.
+23. Scroll up, then ask something that takes a while to answer. **The view must
+    not move** — not while tokens stream in, and not when the turn finishes. A
+    badge on the button counts the entries that landed: each tool activity row,
+    the answer, and a write confirmation if one comes up.
+24. Press the button. It jumps to the newest message, the badge clears, and
+    further tokens follow the bottom again.
+25. Scroll up and send a message. This one *does* pull the view down — your own
+    message is a deliberate "take me to the newest".
+26. Drag the panel (or the window) taller until everything fits: the button
+    hides, because there is nothing left to scroll to.
+
 ### Persistence
 
-22. Reload the page and reopen the panel. The whole exchange is restored,
+27. Reload the page and reopen the panel. The whole exchange is restored,
     including the tool activity rows.
-23. Press the **refresh icon** in the panel header for a new chat.
+28. Press the **refresh icon** in the panel header for a new chat.
 
 ### The floating window
 
 Wide window, panel open. This is a mouse feature: the grips are never shown in
 the drawer, so do it on a desktop-sized window.
 
-24. Press the **pin icon** in the panel header. The panel becomes a smaller
+29. Press the **pin icon** in the panel header. The panel becomes a smaller
     window in the bottom right corner, the conversation un-shifts and takes the
     full width, and the icon becomes a pushpin.
-25. Drag it by the header — anywhere on the header except the buttons and the
+30. Drag it by the header — anywhere on the header except the buttons and the
     model picker, which must still click normally. Drag each of the four edges
     and a corner: the side you grabbed follows the mouse and the opposite side
     stays put, including when you push a side past the minimum.
-26. Reload. Same shape, same position, same size. Sign in as the same user in
+31. Reload. Same shape, same position, same size. Sign in as the same user in
     another browser: it is there too — the geometry is stored server-side, not
     in localStorage.
-27. Make the window smaller (but still wide enough for a column). The floating
+32. Make the window smaller (but still wide enough for a column). The floating
     window is pulled back fully on screen and capped to the viewport. Make it
     big again: the position you dragged it to comes back exactly — like the
     docked width, it was capped for display, not overwritten.
-28. Press the pushpin. Back to the column, at the width it had before, and its
+33. Press the pushpin. Back to the column, at the width it had before, and its
     left-edge resizer works again.
-29. Open a modal from the conversation toolbar while floating — it draws over
+34. Open a modal from the conversation toolbar while floating — it draws over
     the window, not under it.
 
 ### Responsive behaviour
@@ -216,7 +233,7 @@ the drawer, so do it on a desktop-sized window.
 The panel gives up its column as soon as the message thread would drop below
 450px, which with core's default sidebars lands around 1290px. Do this in a
 normal browser window you can resize — a device emulator that does not re-run
-the measurement on rotate will not show step 33. The number to watch is the
+the measurement on rotate will not show step 38. The number to watch is the
 thread, not the window:
 
 ```js
@@ -224,13 +241,13 @@ thread, not the window:
 (m => Math.round(m.getBoundingClientRect().width - parseFloat(getComputedStyle(m).paddingRight)))(document.getElementById('conv-layout-main'))
 ```
 
-30. **Wide (≥ 1370px or so).** Panel open at its stored width,
+35. **Wide (≥ 1370px or so).** Panel open at its stored width,
     `.content-2col` shifted right by it, resizer grabbable on the panel's left
     edge. Reload: still open. Drag the resizer as far left as it goes, then
     narrow the window: the panel stops growing at whatever keeps the thread at
     450 and then shrinks with the window instead of squeezing it. Widening
     gives the dragged width back — it was capped for display, not overwritten.
-31. **Just under the switch (≈ 1150px).** Reload. The panel is **closed**,
+36. **Just under the switch (≈ 1150px).** Reload. The panel is **closed**,
     despite the stored preference, and the conversation has its full width —
     the subject on one line, not one word per line. This is the case a plain
     1100px media query gets wrong: the window is wide enough, but the left nav
@@ -238,21 +255,21 @@ thread, not the window:
     opens the panel as a drawer over the thread: the layout does not shift, a
     dimmer covers the conversation, and clicking the dimmer closes it. With
     the network tab open, none of that fires a `POST /aichatpanel/prefs`.
-32. **Phone (≈ 375px).** Same, full width.
-33. **Resize across the switch.** Wide with the panel open, drag the window
+37. **Phone (≈ 375px).** Same, full width.
+38. **Resize across the switch.** Wide with the panel open, drag the window
     narrower: the panel closes itself and the layout un-shifts the moment the
     thread would go under 450. Widen it again: the panel comes back. Then
     reload wide — still open, i.e. none of that rewrote the preference.
 
 ### Per-mailbox settings
 
-34. *Mailbox settings » AI Chat Panel*. Set **Reply language** to `German` and
+39. *Mailbox settings » AI Chat Panel*. Set **Reply language** to `German` and
     an extra system prompt.
-35. Back in the conversation, ask for a draft reply — it comes back in German.
-36. Set **Available tools** to *Choose for this mailbox* and untick everything
+40. Back in the conversation, ask for a draft reply — it comes back in German.
+41. Set **Available tools** to *Choose for this mailbox* and untick everything
     but `conversation_get`. Ask the previous-conversations question again: the
     assistant no longer has that tool.
-37. Put it back to *Inherit*.
+42. Put it back to *Inherit*.
 
 ---
 
