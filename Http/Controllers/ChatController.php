@@ -819,11 +819,25 @@ class ChatController extends Controller
      * Assemble the messages for one turn: the system message, then as much of
      * the chat as fits.
      *
-     * The order matters. The chat is windowed FIRST, and it is the windowed
-     * cost — not the raw one — that the context builder reserves. That is what
-     * stops a long chat from crowding the conversation out of the system
-     * message: the reservation is now bounded by the history's own share of the
-     * budget, so there is always something left for the ticket.
+     * The order matters, and it is the opposite of the obvious one. The chat is
+     * windowed FIRST, and it is the windowed cost — not the raw one — that the
+     * context builder reserves.
+     *
+     * What the chat is windowed *to* is the point. A flat share of the budget
+     * is not enough: the builder reserves that share unconditionally, on top of
+     * the instructions and the tool schemas and the open editor draft, and
+     * TokenBudget::reserve() is allowed to overspend. Once it does,
+     * ContextBuilder::threadHistory() cannot fit a single thread and the whole
+     * conversation leaves the system message without a word — leaving the model
+     * to answer about the ticket from its own earlier turns in the chat, which
+     * describe the ticket as it was, not as it is. A customer who replies
+     * between two chat messages then does not exist as far as the model is
+     * concerned.
+     *
+     * So the allowance is asked for instead: what is left after the fixed
+     * blocks and the conversation's guaranteed floor. The chat is trimmed to
+     * that and the reservation is honest, which is what keeps the ticket in the
+     * request.
      *
      * Whatever the window dropped comes back as a rollup line appended to the
      * system message rather than as an extra chat message. It is context about
@@ -840,12 +854,22 @@ class ChatController extends Controller
      */
     protected function buildMessages(PanelContext $context, Chat $chat, ToolRegistry $registry, $draft, $mode)
     {
-        $window = HistoryWindow::forContext($context)->apply($chat->fresh()->toApiMessages());
+        $tool_tokens = $this->toolSchemaTokens($registry);
+
+        // A throwaway builder: historyAllowance() renders the editor block, and
+        // that records a drop() on the budget when it caps a long draft. Asking
+        // the builder that produces the real system message would have it count
+        // that drop twice and report it to the user twice.
+        $allowance = (new ContextBuilder($context))
+            ->setEditorDraft($draft, $mode)
+            ->historyAllowance($tool_tokens);
+
+        $window = (new HistoryWindow($allowance))->apply($chat->fresh()->toApiMessages());
 
         $builder = new ContextBuilder($context);
         $builder->setEditorDraft($draft, $mode);
 
-        $system = $builder->build($window['tokens'] + $this->toolSchemaTokens($registry));
+        $system = $builder->build($window['tokens'] + $tool_tokens);
 
         $content = $system['content'];
 

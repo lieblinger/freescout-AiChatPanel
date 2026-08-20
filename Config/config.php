@@ -37,6 +37,15 @@ return [
     // about. Clamped to [0.1, 0.9] on read — see HistoryWindow::share().
     'history_token_share' => 0.5,
 
+    // Share of max_context_tokens the conversation's own messages are
+    // guaranteed, taken off the top before the chat about them may reserve
+    // anything. Without it the chat is guaranteed a share and the ticket is
+    // guaranteed nothing, so a long enough chat empties the history block out
+    // of the system message entirely — and the model then answers from its own
+    // stale earlier turns. Clamped to [0.1, 0.6] on read; see
+    // ContextBuilder::threadFloorShare().
+    'thread_token_floor' => 0.25,
+
     'options' => [
         // -- Connection ----------------------------------------------------
         'enabled'             => ['default' => false],
@@ -55,7 +64,14 @@ return [
         'max_response_tokens' => ['default' => 2048],
 
         // -- Context -------------------------------------------------------
-        'max_context_tokens'  => ['default' => 16000],
+        // Sized for the models this panel is actually pointed at rather than
+        // for the small local ones it was first written against: anything
+        // current carries 128k or more, and the fixed part of the prompt alone
+        // is ~3k, which was a fifth of the old default before the conversation
+        // got a single token. The floor above keeps a long chat off the
+        // conversation's share whatever this is set to; a bigger budget just
+        // means far fewer installs ever reach it.
+        'max_context_tokens'  => ['default' => 64000],
         'system_prompt'       => ['default' => ''],
         'include_notes'       => ['default' => true],
         // Strip the mailbox signature from agent replies before they go into

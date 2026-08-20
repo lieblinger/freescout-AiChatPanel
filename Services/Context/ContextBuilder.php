@@ -28,6 +28,9 @@ class ContextBuilder
     const DELIMITER_OPEN  = '<<<HELPDESK_DATA>>>';
     const DELIMITER_CLOSE = '<<<END_HELPDESK_DATA>>>';
 
+    /** Fallback for the config knob of the same name. */
+    const THREAD_FLOOR_SHARE = 0.25;
+
     /** @var PanelContext */
     protected $context;
 
@@ -36,6 +39,9 @@ class ContextBuilder
 
     /** @var \Illuminate\Support\Collection|null Memoised: metadata() and instructions() both ask. */
     protected $drafts = null;
+
+    /** @var Thread|null|false Memoised newest message; false means not looked up yet. */
+    protected $latest = false;
 
     /** @var string Markdown of what the agent has open in the reply editor. */
     protected $editor_draft = '';
@@ -58,6 +64,66 @@ class ContextBuilder
     public function budget()
     {
         return $this->budget;
+    }
+
+    /**
+     * Share of the budget the conversation's own messages are guaranteed.
+     *
+     * Clamped the way HistoryWindow::share() is, and for the same reason: a bad
+     * edit must be able to neither zero the guarantee nor starve everything
+     * else to honour it.
+     *
+     * @return float
+     */
+    public static function threadFloorShare()
+    {
+        $share = (float) \Config::get(AICHATPANEL_MODULE.'.thread_token_floor', self::THREAD_FLOOR_SHARE);
+
+        return max(0.1, min(0.6, $share));
+    }
+
+    /**
+     * How many tokens the chat history may have, once the conversation's own
+     * floor is protected.
+     *
+     * This exists because the reservation in build() is unconditional. Handed a
+     * chat cost large enough, it pushes the budget past its total before
+     * threadHistory() is reached, tryReserve() then fails for every thread, and
+     * the whole history block silently leaves the system message — at which
+     * point the model answers about the conversation from its own earlier turns
+     * in the chat, which is exactly the state those turns describe rather than
+     * the current one. So the caller windows the chat to this first, and the
+     * chat is genuinely trimmed instead of over-reserved.
+     *
+     * Deliberately cheap: it estimates the fixed blocks only and never calls
+     * threadHistory(), which is the expensive one — a thread query plus an
+     * HTML-to-Markdown conversion per message.
+     *
+     * Call it on a throwaway builder. editorBlock() records a drop() when it
+     * caps a long draft, and that must not land on the budget of the builder
+     * that goes on to produce the real system message.
+     *
+     * @param int $tool_tokens What the tool schemas will cost on the wire.
+     *
+     * @return int
+     */
+    public function historyAllowance($tool_tokens = 0)
+    {
+        $total = $this->budget->total();
+
+        $fixed = TokenBudget::estimate($this->instructions())
+            + TokenBudget::estimate($this->now())
+            + TokenBudget::estimate($this->metadata())
+            + TokenBudget::estimate($this->agent())
+            + TokenBudget::estimate($this->editorBlock());
+
+        $floor = (int) floor($total * self::threadFloorShare());
+
+        return (int) max(0, min(
+            // Never more than the chat could have had before this existed.
+            (int) floor($total * HistoryWindow::share()),
+            $total - $fixed - max(0, (int) $tool_tokens) - $floor
+        ));
     }
 
     /**
@@ -182,6 +248,7 @@ class ContextBuilder
         $lines[] = '- If the conversation does not contain enough information to answer, say so plainly instead of inventing details.';
         $lines[] = '- Never invent order numbers, prices, dates, policies or names. If you need a fact you do not have, say what is missing.';
         $lines[] = '- The current date and time are given below. Work everything time-related out from them and never guess today\'s date. A delivery date, a deadline, an opening time or a turnaround you were not given is not yours to state.';
+        $lines[] = '- The conversation metadata and the conversation history below are read from the database afresh every time you are sent a message, so they are the conversation as it stands right now. The earlier messages in this chat are not: they describe how it stood when they were written, and the conversation may have moved on since — a customer can reply between two of your answers. Where the two disagree, the blocks below are right and what you said earlier is out of date. Never tell the agent that nothing has changed, or that the customer has not written, on the strength of your own earlier answer: check the blocks below, and if they were shortened, call conversation_get.';
         $lines[] = '- Attachments reach you as a filename and a type, nothing more. You cannot see an image or read a document, and a filename is not evidence of what is in the file: "Kontakt_im_Rahmen.JPG" tells you someone named a photo, not what it shows. Never say you have looked at, seen, examined or checked an attachment, and never describe what one contains.';
         $lines[] = '- You also cannot attach anything to a draft. Never write that something is attached, enclosed or included — if something needs attaching, write the draft without it and tell the agent what to attach.';
         $lines[] = '- Never state that an action has already been taken — an order placed, a request passed to a colleague, a check carried out, a message forwarded — unless the conversation or the agent says it was. The same goes for what happens next: promise nothing on the agent\'s behalf that they have not told you.';
@@ -304,7 +371,13 @@ class ContextBuilder
 
         return 'Current date and time: '.$now->format('l, '.Clock::FORMAT_DATE_TIME)
             .' ('.Clock::timezone($user).', UTC'.Clock::offset($user).'). '
-            .'Every timestamp you are given, here and in tool results, is in this timezone.';
+            .'Every timestamp you are given, here and in tool results, is in this timezone. '
+            // A draft is written now, not when the message it answers was sent.
+            // Copying the customer's "schonen Abend" into a mail the agent will
+            // send at 11:00 is the failure this sentence exists to stop.
+            .'Greetings and sign-offs in anything you draft must match the time of day above, not the time of day '
+            .'of the message you are answering. Never copy a greeting or a sign-off from the customer without '
+            .'checking it against the clock.';
     }
 
     /**
@@ -345,6 +418,22 @@ class ContextBuilder
             $rows[] = 'Customer: none linked';
         }
 
+        $latest = $this->latestMessage();
+
+        if ($latest) {
+            // Reserved before the thread history, so this outlives it when the
+            // budget runs short. That matters: with the history block gone the
+            // only account of the conversation left in the request is the chat
+            // transcript, in which the assistant's own earlier turns describe
+            // the conversation as it was when they were written. One line of
+            // current fact is what stops those turns being the last word.
+            $rows[] = 'Latest message: '.ThreadFormatter::kind($latest)
+                .' from '.ThreadFormatter::author($latest)
+                .' — '.$this->stamp($latest->created_at, 'unknown date').'.'
+                .' That is the newest message in this conversation right now,'
+                .' whatever earlier messages in this chat say.';
+        }
+
         $drafts = $this->draftMarker();
 
         if ($drafts) {
@@ -352,6 +441,72 @@ class ContextBuilder
         }
 
         return "Conversation metadata:\n".implode("\n", $rows);
+    }
+
+    /**
+     * A timestamp with how long ago it was.
+     *
+     * The absolute date alone makes every "how long ago" a subtraction the
+     * model has to do itself — which TimeNowTool's docblock already records it
+     * being unreliable at, with no sign when it gets it wrong. Clock::humanDiff
+     * does it in PHP for a handful of tokens.
+     *
+     * @param \Carbon\Carbon|string|null $date
+     * @param string                     $fallback
+     *
+     * @return string
+     */
+    protected function stamp($date, $fallback = '')
+    {
+        $stamp = Clock::dateTime($date, $this->context->user);
+
+        if ($stamp === '') {
+            return $fallback;
+        }
+
+        $ago = Clock::humanDiff($date, $this->context->user);
+
+        if ($ago === '') {
+            return $stamp;
+        }
+
+        // humanDiff() returns durations for everything except the most recent
+        // minute, where it returns "just now" — which already reads as a point
+        // in time and must not be given an "ago".
+        return $stamp.' ('.($ago === 'just now' ? $ago : $ago.' ago').')';
+    }
+
+    /**
+     * The newest message in the conversation, drafts and status changes aside.
+     *
+     * Its own one-row query rather than reusing threads(): metadata() is asked
+     * by historyAllowance() too, which runs before the chat is windowed and
+     * must stay cheap — threads() loads every body in the conversation.
+     *
+     * @return Thread|null
+     */
+    protected function latestMessage()
+    {
+        if ($this->latest !== false) {
+            return $this->latest;
+        }
+
+        $types = [Thread::TYPE_CUSTOMER, Thread::TYPE_MESSAGE];
+
+        if ($this->context->setting('include_notes')) {
+            $types[] = Thread::TYPE_NOTE;
+        }
+
+        // Bodies are deliberately not selected: this line says which message is
+        // newest, not what it said.
+        $this->latest = $this->context->conversation->threads()
+            ->whereIn('type', $types)
+            ->where('state', Thread::STATE_PUBLISHED)
+            ->select(['id', 'conversation_id', 'type', 'subtype', 'state', 'created_at', 'user_id', 'customer_id'])
+            ->orderBy('id', 'desc')
+            ->first();
+
+        return $this->latest;
     }
 
     /**
@@ -535,17 +690,48 @@ class ContextBuilder
         // reverse for the prompt: models do better with chronological order.
         $rendered = [];
         $dropped = 0;
+        $unreadable = 0;
+        $total = count($threads);
+        $index = 0;
 
         foreach ($threads as $thread) {
+            $index++;
+
             $block = $this->renderThread($thread, $signature);
 
             if ($block === '') {
+                // Nothing survived quote and signature stripping. Both are
+                // best-effort by nature, so this is a message the model is
+                // simply not being shown — which was silent until now, and a
+                // silently missing message is the worst kind.
+                if (trim((string) $thread->body) !== '') {
+                    $unreadable++;
+                }
+
                 continue;
             }
 
-            if (!$this->budget->tryReserve(TokenBudget::estimate($block))) {
-                $dropped++;
+            $cost = TokenBudget::estimate($block);
+
+            // The newest message is kept whatever it costs, exactly as
+            // HistoryWindow::walk() keeps the newest group and for the same
+            // reason: it is what the agent is most likely asking about, and an
+            // empty history is a worse failure than an oversized request.
+            if (!$rendered) {
+                $this->budget->reserve($cost);
+                $rendered[] = $block;
                 continue;
+            }
+
+            if (!$this->budget->tryReserve($cost)) {
+                // Stop at the first message that does not fit instead of
+                // carrying on to squeeze in older, smaller ones. Same reasoning
+                // as HistoryWindow::walk() — a history that jumps is worse than
+                // a short one — and it is what made the notice below tell the
+                // truth: continuing here dropped newer messages while keeping
+                // older ones, then called them "the oldest".
+                $dropped = $total - $index + 1;
+                break;
             }
 
             $rendered[] = $block;
@@ -553,6 +739,10 @@ class ContextBuilder
 
         if ($dropped) {
             $this->budget->drop('messages', '', $dropped);
+        }
+
+        if ($unreadable) {
+            $this->budget->drop('unreadable', '', $unreadable);
         }
 
         if (!$rendered) {
@@ -564,7 +754,13 @@ class ContextBuilder
         $header = 'Conversation history, oldest first.';
 
         if ($dropped) {
-            $header .= ' NOTE: the '.$dropped.' oldest message(s) were left out because the conversation is too long. Say so if the answer depends on them.';
+            $header .= ' NOTE: the '.$dropped.' oldest message(s) were left out because the conversation is too long.'
+                .' Call conversation_get before answering anything that depends on them, and say so if you still cannot.';
+        }
+
+        if ($unreadable) {
+            $header .= ' NOTE: '.$unreadable.' message(s) had nothing left once quoted text and signatures were removed,'
+                .' so their bodies are not shown here. Call conversation_get if the answer may depend on them.';
         }
 
         return $header."\n".self::DELIMITER_OPEN."\n".implode("\n\n", $rendered)."\n".self::DELIMITER_CLOSE;
@@ -604,19 +800,28 @@ class ContextBuilder
     protected function renderThread(Thread $thread, $signature)
     {
         $body = ThreadFormatter::body($thread, $signature);
+        $attachments = $this->attachmentList($thread);
 
-        if (trim($body) === '') {
+        if (trim($body) === '' && $attachments === '') {
             return '';
         }
 
         $header = '['.ThreadFormatter::kind($thread).'] '
             .ThreadFormatter::author($thread)
-            .' — '.($thread->created_at ? Clock::dateTime($thread->created_at, $this->context->user) : 'unknown date');
-
-        $attachments = $this->attachmentList($thread);
+            .' — '.$this->stamp($thread->created_at, 'unknown date');
 
         if ($attachments) {
             $header .= "\nAttachments: ".$attachments;
+        }
+
+        if (trim($body) === '') {
+            // A mail that is nothing but attachments, or one whose text did not
+            // survive quote and signature stripping. Returning '' here dropped
+            // the whole message — the model was never told it existed, let
+            // alone that it could not read it. The header costs a dozen tokens
+            // and is the difference between an incomplete history and a
+            // misleading one.
+            return $header."\n".'[This message has no readable text.]';
         }
 
         return $header."\n".$this->sanitise($body);

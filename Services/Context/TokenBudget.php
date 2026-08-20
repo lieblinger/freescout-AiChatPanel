@@ -128,7 +128,7 @@ class TokenBudget
     /**
      * Record something that did not fit.
      *
-     * @param string $kind  'messages' | 'chat' | 'chat_results' | 'provider' | 'draft'
+     * @param string $kind  'messages' | 'unreadable' | 'chat' | 'chat_results' | 'provider' | 'draft'
      * @param string $label
      * @param int    $count
      *
@@ -181,6 +181,18 @@ class TokenBudget
                 '{1} the oldest message|[2,*] the :count oldest messages',
                 $this->dropped['messages']['count'],
                 ['count' => $this->dropped['messages']['count']]
+            );
+        }
+
+        if (!empty($this->dropped['unreadable']['count'])) {
+            // Not a budget drop at all: these are messages whose text did not
+            // survive quote and signature stripping. Reported through the same
+            // channel because the consequence is the same one the agent needs
+            // to know about — the assistant did not see them.
+            $parts[] = trans_choice(
+                '{1} one message whose text could not be read|[2,*] :count messages whose text could not be read',
+                $this->dropped['unreadable']['count'],
+                ['count' => $this->dropped['unreadable']['count']]
             );
         }
 

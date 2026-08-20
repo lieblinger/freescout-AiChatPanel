@@ -26,7 +26,7 @@
     "Whether each model can call tools. Filled in automatically by the connection test; correct it here if the probe got it wrong. Unlisted models are probed on first use.": "Ob das jeweilige Modell Tools aufrufen kann. Wird vom Verbindungstest automatisch gesetzt; hier korrigierbar, falls der Test danebenlag. Nicht gelistete Modelle werden bei der ersten Verwendung geprüft.",
     "Context": "Kontext",
     "Max context tokens": "Maximale Kontext-Tokens",
-    "Budget for the whole prompt: the conversation, the extra context, and the chat itself. The chat may use half of it before its oldest turns are dropped; the rest is kept for the conversation. The panel says so whenever anything is left out.": "Budget für den gesamten Prompt: das Gespräch, den zusätzlichen Kontext und den Chat selbst. Der Chat darf die Hälfte davon belegen, bevor seine ältesten Runden entfallen; der Rest bleibt dem Gespräch vorbehalten. Das Panel weist darauf hin, sobald etwas weggelassen wird.",
+    "Budget for the whole prompt: the conversation, the extra context, and the chat itself. A quarter of it is reserved for the conversation and the chat cannot take that share, however long it grows; the newest message is kept whatever else has to go. The panel says so whenever anything is left out.": "Budget für den gesamten Prompt: das Gespräch, den zusätzlichen Kontext und den Chat selbst. Ein Viertel davon ist dem Gespräch vorbehalten und kann vom Chat nicht belegt werden, wie lang er auch wird; die neueste Nachricht bleibt in jedem Fall erhalten. Das Panel weist darauf hin, sobald etwas weggelassen wird.",
     "Include internal notes": "Interne Notizen einbeziehen",
     "Default for all mailboxes. Each mailbox can override it.": "Vorgabe für alle Postfächer. Jedes Postfach kann sie überschreiben.",
     "Send personal data": "Personenbezogene Daten senden",
@@ -214,6 +214,7 @@
     "Yesterday": "Gestern",
     "{0} No other conversations|{1} 1 other conversation|[2,*] :count other conversations": "{0} Keine weiteren Gespräche|{1} 1 weiteres Gespräch|[2,*] :count weitere Gespräche",
     "{0} No drafts on #:number|{1} Read 1 draft on #:number|[2,*] Read :count drafts on #:number": "{0} Keine Entwürfe zu #:number|{1} 1 Entwurf zu #:number gelesen|[2,*] :count Entwürfe zu #:number gelesen",
+    "{1} one message whose text could not be read|[2,*] :count messages whose text could not be read": "{1} eine Nachricht, deren Text nicht gelesen werden konnte|[2,*] :count Nachrichten, deren Text nicht gelesen werden konnte",
     "{1} the oldest message|[2,*] the :count oldest messages": "{1} die älteste Nachricht|[2,*] die :count ältesten Nachrichten",
     "{1} the oldest turn of this chat|[2,*] the :count oldest turns of this chat": "{1} die älteste Runde dieses Chats|[2,*] die :count ältesten Runden dieses Chats"
 }

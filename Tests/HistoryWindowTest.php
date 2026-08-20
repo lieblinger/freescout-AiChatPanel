@@ -260,10 +260,17 @@ class HistoryWindowTest extends AiChatPanelTestCase
         $before = (new ContextBuilder($this->context()))->build($raw);
 
         $this->assertStringNotContainsString(
-            'Message number 12.',
+            'Message number 11.',
             $before['content'],
             'precondition: the unbounded reservation used to leave no room for the conversation'
         );
+
+        // Even at that absurd reservation the newest message survives now, the
+        // way HistoryWindow keeps the newest group: this is the second half of
+        // the same guarantee, and the half that decides whether a customer who
+        // replied between two chat messages exists as far as the model is
+        // concerned. See ContextBuilder::threadHistory().
+        $this->assertStringContainsString('Message number 12.', $before['content']);
 
         // What happens now: the chat is windowed first, and only what survives
         // is reserved.
