@@ -67,8 +67,14 @@ class JsStrings
             'day_yesterday'      => __('Yesterday'),
 
             // -- Panel shape ---------------------------------------------------
+            // Two pairs, because the pin does two different things. Where the
+            // panel has a column to return to, it docks and undocks. Where it
+            // has not — a tablet, where the choice is between a window and the
+            // drawer — "Dock" would name a shape the user cannot have.
             'dock'               => __('Dock'),
             'undock'             => __('Undock'),
+            'as_drawer'          => __('Show at the side'),
+            'as_window'          => __('Show as a window'),
 
             // -- Message actions -----------------------------------------------
             'insert_reply'       => __('Insert into reply'),

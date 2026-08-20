@@ -49,25 +49,29 @@ class FloatingPanelTest extends AiChatPanelTestCase
     }
 
     /**
-     * Undocking is a desktop affordance. Where the panel is a drawer there is
-     * no room for a window and no mouse to drag one with.
+     * A window needs somewhere to be. A phone is not somewhere.
+     *
+     * The floor moved down in 1.3.4: a tablet may have a window, because it has
+     * room for one even where it has no room for a column. A phone still may
+     * not — at 375px a window would be the screen — so the pin and the grip are
+     * hidden there and isFloating() refuses outright.
      *
      * @return void
      */
-    public function testTheWindowIsNotOfferedBelowTheBreakpoint()
+    public function testTheWindowIsNotOfferedOnAPhone()
     {
         $this->assertMatchesRegularExpression(
-            '~body\.aicp-overlay\s+\.aicp-pin\s*\{[^}]*display:\s*none~',
+            '~body\.aicp-phone\s+\.aicp-pin\s*\{[^}]*display:\s*none~',
             $this->css(),
-            'The undock button is shown in overlay mode, where a floating window cannot be '
-                .'placed or dragged.'
+            'The undock button is shown on a phone, where a floating window cannot be placed '
+                .'or dragged.'
         );
 
         $this->assertMatchesRegularExpression(
-            '~return\s+panel\.pref_mode\s*===\s*MODE_FLOATING\s*&&\s*!isOverlay\(\)~',
+            '~function\s+isFloating\(\)\s*\{\s*if\s*\(isPhone\(\)\)\s*\{\s*return\s+false;~',
             $this->js(),
-            'isFloating() no longer defers to the layout mode, so a shape chosen on a desktop '
-                .'turns the drawer into a window on a phone.'
+            'isFloating() no longer refuses a phone first of all, so a shape chosen on a '
+                .'desktop turns the drawer into a window on a 375px screen.'
         );
     }
 

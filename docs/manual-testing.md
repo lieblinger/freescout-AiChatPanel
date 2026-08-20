@@ -206,8 +206,8 @@ Needs a chat long enough to overflow the panel — steps 1–21 leave you with o
 
 ### The floating window
 
-Wide window, panel open. This is a mouse feature: the grips are never shown in
-the drawer, so do it on a desktop-sized window.
+Wide window, panel open. Do the mouse pass here on a desktop-sized window; the
+tablet band and the touch pass have a section of their own below.
 
 29. Press the **pin icon** in the panel header. The panel becomes a smaller
     window in the bottom right corner, the conversation un-shifts and takes the
@@ -228,12 +228,70 @@ the drawer, so do it on a desktop-sized window.
 34. Open a modal from the conversation toolbar while floating — it draws over
     the window, not under it.
 
+### Tablet width
+
+Between 768px and the switch there is no column to be had, so the pin swaps
+the **drawer** and the **window** instead. Steps 35–38 work in a plain resized
+browser; step 39 needs touch, so use a real tablet or Chrome's device toolbar
+with touch emulation forced on — with a mouse, none of the new code runs.
+
+Which shape the panel thinks it is, at a glance:
+
+```js
+// paste in the console
+(() => JSON.stringify({w: innerWidth, cls: document.body.className.match(/aicp-\S+/g)}))()
+```
+
+35. **The top of the band (≈ 1250px).** Narrow the window until `aicp-overlay`
+    appears on `<body>`. The **pin is still there** and so is the left-edge
+    grip. That single observation is the whole feature.
+36. **Drawer resize (≈ 900px).** Reload: the panel is closed, and the network
+    tab shows no `POST /aichatpanel/prefs`. Open it from the toolbar, then drag
+    its left edge. It widens, and it **stops** about 56px short of the left edge
+    however hard you pull — the dimmer beside it stays tappable. Release:
+    exactly one `prefs` POST, and `panel_width` is the width you can see, not
+    900.
+37. **That width on the desktop.** Widen past 1400px and reload. The column is
+    back at the width from step 36. Narrow to ≈ 1350 and widen again: it
+    returns unchanged — capped for display, not overwritten.
+38. **Detach and re-attach (≈ 900px).** Press the pin. The drawer becomes a
+    window, **the dimmer disappears**, the conversation behind it scrolls and
+    clicks normally, and the tooltip reads *Show at the side* rather than
+    *Dock*. The panel must **not** close itself — that is the stale-memo bug.
+    Reload: same window, same box. Press the pin again: drawer, dimmer back,
+    still open, grip live.
+39. **Touch.** On a tablet or with touch emulation on:
+    - Drag the window by its header with one finger. It follows; the page
+      behind it does **not** scroll.
+    - Tap the model picker — the native picker opens. Tap ✕ — it closes.
+      Neither is a drag: no `prefs` POST.
+    - Press and hold the header for two seconds. No selection, no iOS callout.
+    - Put a second finger on the header mid-drag. The window keeps following
+      the first one and does not jump.
+    - Drag each of the four edges and one corner. They must be findable with a
+      fingertip, not just with a fingernail.
+    - Start a drag, then trigger the home gesture. The window stays where the
+      cancel left it and **nothing** is posted.
+40. **Rotate.** With the window near a corner in landscape, rotate to portrait:
+    it is fully on screen straight away, not after a scroll. Rotate back — the
+    landscape position returns exactly.
+41. **Keyboard.** Tap into the composer. The window's input stays above the
+    software keyboard. Type and send.
+42. **A fresh agent.** Sign in at ≈ 900px as someone who has never pressed the
+    pin. The panel opens as a **drawer**, not a window, even though
+    `MODE_DEFAULT` is floating — `panel_float_x` is NULL for them. Press the
+    pin once and reload: now it is a window, and the column is set. This is the
+    regression guard for every existing tablet user.
+43. **The folder menu (≈ 900px).** With a window open, slide out core's
+    collapsed folder menu. The window draws over it — expected. Move the window
+    and the menu is usable again.
+
 ### Responsive behaviour
 
 The panel gives up its column as soon as the message thread would drop below
 450px, which with core's default sidebars lands around 1290px. Do this in a
 normal browser window you can resize — a device emulator that does not re-run
-the measurement on rotate will not show step 38. The number to watch is the
+the measurement on rotate will not show step 47. The number to watch is the
 thread, not the window:
 
 ```js
@@ -241,13 +299,13 @@ thread, not the window:
 (m => Math.round(m.getBoundingClientRect().width - parseFloat(getComputedStyle(m).paddingRight)))(document.getElementById('conv-layout-main'))
 ```
 
-35. **Wide (≥ 1370px or so).** Panel open at its stored width,
+44. **Wide (≥ 1370px or so).** Panel open at its stored width,
     `.content-2col` shifted right by it, resizer grabbable on the panel's left
     edge. Reload: still open. Drag the resizer as far left as it goes, then
     narrow the window: the panel stops growing at whatever keeps the thread at
     450 and then shrinks with the window instead of squeezing it. Widening
     gives the dragged width back — it was capped for display, not overwritten.
-36. **Just under the switch (≈ 1150px).** Reload. The panel is **closed**,
+45. **Just under the switch (≈ 1150px).** Reload. The panel is **closed**,
     despite the stored preference, and the conversation has its full width —
     the subject on one line, not one word per line. This is the case a plain
     1100px media query gets wrong: the window is wide enough, but the left nav
@@ -255,21 +313,24 @@ thread, not the window:
     opens the panel as a drawer over the thread: the layout does not shift, a
     dimmer covers the conversation, and clicking the dimmer closes it. With
     the network tab open, none of that fires a `POST /aichatpanel/prefs`.
-37. **Phone (≈ 375px).** Same, full width.
-38. **Resize across the switch.** Wide with the panel open, drag the window
-    narrower: the panel closes itself and the layout un-shifts the moment the
-    thread would go under 450. Widen it again: the panel comes back. Then
-    reload wide — still open, i.e. none of that rewrote the preference.
+46. **Phone (≈ 375px).** Same, full width — and here the pin and the left-edge
+    grip really are gone, which is the floor of the tablet band above.
+47. **Resize across the switch.** Wide with the panel open *as a column*, drag
+    the window narrower: the panel closes itself and the layout un-shifts the
+    moment the thread would go under 450. Widen it again: the panel comes back.
+    Then reload wide — still open, i.e. none of that rewrote the preference.
+    Repeat it with the panel *undocked*: this time nothing happens in either
+    direction, because a window never took the thread's width to begin with.
 
 ### Per-mailbox settings
 
-39. *Mailbox settings » AI Chat Panel*. Set **Reply language** to `German` and
+48. *Mailbox settings » AI Chat Panel*. Set **Reply language** to `German` and
     an extra system prompt.
-40. Back in the conversation, ask for a draft reply — it comes back in German.
-41. Set **Available tools** to *Choose for this mailbox* and untick everything
+49. Back in the conversation, ask for a draft reply — it comes back in German.
+50. Set **Available tools** to *Choose for this mailbox* and untick everything
     but `conversation_get`. Ask the previous-conversations question again: the
     assistant no longer has that tool.
-42. Put it back to *Inherit*.
+51. Put it back to *Inherit*.
 
 ---
 

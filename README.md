@@ -19,9 +19,10 @@ Licence: **AGPL-3.0-or-later**.
 
 - A resizable chat panel on the right of the conversation, opened from a toolbar
   button, and undockable into a window you can drag anywhere and size from any
-  edge. Open/closed state, width, shape and the window's position persist per
-  user, and the panel gets out of the way rather than let the conversation
-  become unreadable — see [Responsive behaviour](#responsive-behaviour).
+  edge — with a mouse or with a finger, on a tablet as much as on a desktop.
+  Open/closed state, width, shape and the window's position persist per user,
+  and the panel gets out of the way rather than let the conversation become
+  unreadable — see [Responsive behaviour](#responsive-behaviour).
 - Multi-turn chat about the open conversation, with the full thread history,
   conversation metadata, customer details and attachment filenames as context.
 - **Also on a new mail.** The panel is on the New Conversation screen too, so a
@@ -69,40 +70,59 @@ stays — the clock, the customer, their previous conversations.
 
 ### Docked or floating
 
-On a desktop the panel has two shapes, swapped with the pin button in its
-header:
+The panel has three shapes. Which two of them the pin button in its header
+swaps between depends on how much room there is:
 
 | Shape | What it is | Conversation layout |
 |---|---|---|
-| **Docked** (default) | A column on the right, full height, drag its left edge to set the width (300–900px) | shifted left by the panel width |
-| **Floating** | A smaller window over the page — drag the header to move it, any edge or corner to size it (320–1200px each way) | untouched, the thread keeps its full width |
+| **Docked** | A column on the right, full height, drag its left edge to set the width (300–900px) | shifted left by the panel width |
+| **Floating** (default) | A smaller window over the page — drag the header to move it, any edge or corner to size it (320–1200px each way) | untouched, the thread keeps its full width |
+| **Drawer** | Full height at the right edge, over a dimmed thread that dismisses it on a tap. Drag its left edge to set the width | untouched |
+
+Wide enough for three columns, the pin swaps **docked ↔ floating**. Narrower
+than that there is no column to be had, so it swaps **drawer ↔ floating**
+instead — the window is still perfectly placeable on a tablet, it is only the
+third *column* that will not fit. On a phone (≤767px) there is no choice to
+make: the drawer is the whole screen, and the pin and the edge grip are hidden.
 
 The first undock puts the window in the bottom right corner, roughly 420px wide
 and three fifths of the window tall. Shape, position and size are stored per
 user, so the window comes back where it was left — in any browser, not just the
-one it was moved in.
+one it was moved in. That is one set of values, not one per device: a window
+moved on the tablet is where the desktop finds it next, and a drawer dragged
+wider there is the column's width when you get back to the desktop.
+
+A tablet **restores** a window you placed; it never seeds one. Everyone starts
+on "floating" whether they chose it or not, so the stored shape alone is not
+evidence of a decision — the saved position is. Until the pin has been pressed
+once, a screen with no room for a column shows the drawer.
 
 A window is always fully on screen: on a smaller monitor it is capped to the
 viewport and pulled back inside it, **for display only**. The stored geometry is
 untouched, so the original monitor gets the original position straight back —
-the same split the docked width already makes. Below the drawer breakpoint there
-is no window at all: the panel is a drawer and the pin button is hidden.
+the same split the docked width already makes.
+
+All of it works with a finger as well as a mouse: the grips grow on a touch
+screen, a tap on the header is a tap and not a nudge, and a drag the system
+interrupts leaves the window where it was rather than storing somewhere nobody
+chose.
 
 ### Responsive behaviour
 
 **The message thread always wins.** The panel takes a column of its own only
 while the thread would keep at least **450px** after everything else has been
-paid for; otherwise it becomes a drawer over the conversation and starts
-closed. What "everything else" costs is measured, not assumed — core's left nav
-(260px until 991px) and the customer rail (280px until 1100px) both come off
-the window before the panel gets to ask for anything.
+paid for; otherwise it steps out of the layout and becomes a drawer or a window
+over it, and starts closed. What "everything else" costs is measured, not
+assumed — core's left nav (260px until 991px) and the customer rail (280px until
+1100px) both come off the window before the panel gets to ask for anything.
 
 | Panel | Conversation layout | Opens itself from the saved preference |
 |---|---|---|
 | column on the right, drag to resize (300–900px) | shifted left by the panel width | yes |
 | floating window, dragged and sized by the user | untouched | yes |
-| drawer over the thread, dismissed by tapping the dimmer | untouched | no — starts closed |
-| drawer, full width (≤ 767px) | untouched | no — starts closed |
+| drawer over the thread, drag its edge to resize, dismissed by tapping the dimmer | untouched | no — starts closed |
+| floating window, below the switch — only if one was placed there | untouched | no — starts closed |
+| drawer, full width, no pin and no grip (≤ 767px) | untouched | no — starts closed |
 
 With core's default sidebars that puts the switch at roughly **1290px**: below
 it even a 300px panel would leave the thread under 450px, so there is no column
@@ -111,11 +131,18 @@ a strip. Between there and about 1370px the panel is a column but a narrower
 one than the stored width — capped for display only, so widening the window
 gives the stored width straight back.
 
-As a drawer a backdrop dims the thread and dismisses it on tap, and
-opening or closing it does **not** write the stored preference: reading a ticket
-on a phone never changes what the desktop comes back to. Resizing the window
-past the switch closes the panel on the way down and restores it on the way
-back up, again without touching the preference.
+Below the switch the panel is still yours to shape, it just cannot be a column.
+A drawer is dragged wider by its left edge, capped to leave a tappable strip of
+the dimmer beside it — again for display only, so the width survives the trip
+back to a wide screen. The pin turns it into a window and back.
+
+Opening or closing the panel below the switch does **not** write the stored
+preference: reading a ticket on a phone never changes what the desktop comes
+back to. Shape and size are a different matter — those are decisions, and they
+are stored wherever they are made. Resizing the browser past the switch closes
+a drawer-bound panel on the way down and restores it on the way back up,
+without touching the preference; a window is left alone in both directions,
+because it never took the thread's width to begin with.
 
 ### Built-in tools
 

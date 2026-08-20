@@ -361,6 +361,12 @@
             : MODE_DOCKED;
         panel.float = readFloat($el);
 
+        // Whether this user has ever placed a window, as opposed to merely
+        // carrying the default shape. Read here rather than from panel.float
+        // later, because seedFloat() fills that in the same session — see
+        // isFloating(), which is the only thing that asks.
+        placed_float = panel.float !== null;
+
         setWidth(parseInt($el.attr('data-width'), 10) || 380, false);
         updatePanelBounds();
         applyMode();
@@ -376,13 +382,18 @@
 
         // The stored preference belongs to the wide layout. Narrower viewports
         // start closed and are opened deliberately, from the toolbar button.
+        //
+        // isOverlay() and not isDrawer(), on purpose: a tablet may shape the
+        // panel, but it still does not decide whether the desktop finds it
+        // open. That split is the whole of the open state's rule, and the two
+        // gates in openPanel() and closePanel() keep the other half of it.
         panel.pref_open = $el.attr('data-open') === '1';
 
         if (panel.pref_open && !isOverlay()) {
             openPanel(false);
         }
 
-        // Seeds last_overlay, so the first resize does not report a transition
+        // Seeds last_drawer, so the first resize does not report a transition
         // that never happened.
         applyLayoutMode();
     }
@@ -556,7 +567,24 @@
             togglePanel();
         });
 
-        $(window).on('scroll resize', scheduleBoundsUpdate);
+        $(window).on('scroll resize orientationchange', scheduleBoundsUpdate);
+
+        // A rotation reports itself before iPadOS has finished changing its
+        // mind about innerWidth and innerHeight, so the first pass clamps the
+        // window against the dimensions it is leaving. Run once more when the
+        // dust has settled.
+        $(window).on('orientationchange', function () {
+            window.setTimeout(scheduleBoundsUpdate, 250);
+        });
+
+        // The software keyboard shrinks the visual viewport and leaves the
+        // layout viewport alone, so $(window).height() does not move and a
+        // window sitting low on the screen puts its composer under the keys —
+        // while you are typing in it, which is the only thing that composer is
+        // for. See viewportHeight().
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', scheduleBoundsUpdate);
+        }
 
         // The reader's own scrolling is what decides whether the list follows
         // new content. Programmatic jumps are instant, so by the time this runs
@@ -686,12 +714,17 @@
     function openPanel(persist) {
         $('body').addClass('aicp-open');
 
-        if (isOverlay()) {
+        // The dimmer belongs to the drawer, not to the band. A window on a
+        // tablet is not modal — the point of it is that the conversation keeps
+        // its full width and stays readable behind it — and the backdrop sits
+        // at z-index 1040, which would bury a window at 1030.
+        if (isDrawer()) {
             $('.aicp-backdrop').removeClass('hidden');
         }
 
         // Overlay mode is a per-device, per-visit state: opening the drawer on
-        // a phone must not become the state the desktop comes back to.
+        // a phone must not become the state the desktop comes back to. Still
+        // isOverlay() and not isDrawer() — see the note in initPanel().
         if (persist !== false && !isOverlay()) {
             panel.pref_open = true;
             savePrefs({panel_open: 1});
@@ -753,33 +786,84 @@
         return narrow || maxPanelWidth() < WIDTH_MIN;
     }
 
-    var last_overlay = null;
+    /**
+     * Is the screen too small to place a window on at all?
+     *
+     * The floor of the band where the panel is still shaped by the user. Below
+     * it the drawer is the only sensible thing: at 375px a window would be the
+     * screen, and there is nothing to drag it over. 767px is Bootstrap's own
+     * phone breakpoint and the one the stylesheet already uses to make the
+     * drawer full width, so the two agree by construction.
+     *
+     * Deliberately not isOverlay(): that one asks whether a *column* fits,
+     * which a window and a drawer never needed to care about. Conflating the
+     * two is what used to cost every tablet its pin button.
+     */
+    function isPhone() {
+        return window.matchMedia
+            ? window.matchMedia('(max-width: 767px)').matches
+            : $(window).width() <= 767;
+    }
 
     /**
-     * Keep the open state in step with the layout mode when the window is
-     * resized across the breakpoint.
+     * Is the panel a drawer over the thread right now?
      *
-     * Entering overlay mode closes the panel, so the thread the user just made
-     * room for is actually readable; leaving it restores whatever the stored
+     * Where there is no room for a column, the panel is one of two things and
+     * the user picks which with the pin: a window they placed themselves, or
+     * the drawer. This is the other one — which is what keeps .aicp-overlay and
+     * .aicp-floating mutually exclusive, an invariant the z-index stack now
+     * depends on (see the floating window's rule in module.css).
+     */
+    function isDrawer() {
+        return isOverlay() && !isFloating();
+    }
+
+    var last_drawer = null;
+
+    /**
+     * Put the current band on <body>.
+     *
+     * Pure and idempotent, so anything that changes the shape can call it —
+     * togglePanelMode() does, and must, because it changes isDrawer() without
+     * going anywhere near a resize.
+     *
+     * Neither class can be a media query. Whether the panel still fits depends
+     * on the panel's own width and on how much of the window core's two
+     * sidebars are taking, neither of which CSS can measure; and whether the
+     * drawer wins depends on the stored shape as well. aicp-phone could have
+     * been a media query, but it belongs beside the other two — one place to
+     * read the layout state off the DOM.
+     */
+    function applyDrawerClass() {
+        $('body')
+            .toggleClass('aicp-overlay', isDrawer())
+            .toggleClass('aicp-phone', isPhone());
+    }
+
+    /**
+     * Keep the open state in step with the layout when the window is resized
+     * across the breakpoint.
+     *
+     * Becoming a drawer closes the panel, so the thread the user just made room
+     * for is actually readable; ceasing to be one restores whatever the stored
      * preference says. Neither direction writes that preference.
      *
-     * The body class is what the stylesheet keys the drawer rules off. It
-     * cannot be a media query: whether the panel still fits depends on the
-     * panel's own width and on how much of the window core's two sidebars are
-     * taking, neither of which CSS can measure.
+     * The transition is measured on isDrawer(), not on isOverlay(): crossing
+     * the switch with a window open changes nothing at all, because a window
+     * never took the thread's width in the first place.
      */
     function applyLayoutMode() {
-        var overlay = isOverlay();
+        var drawer = isDrawer();
 
-        $('body').toggleClass('aicp-overlay', overlay);
+        applyDrawerClass();
 
-        if (overlay === last_overlay) {
+        if (drawer === last_drawer) {
             return;
         }
 
-        last_overlay = overlay;
+        last_drawer = drawer;
 
-        if (overlay) {
+        if (drawer) {
             if ($('body').hasClass('aicp-open')) {
                 closePanel(false);
             }
@@ -891,6 +975,12 @@
     // Gap between a freshly undocked window and the corner it starts in.
     var FLOAT_MARGIN = 24;
 
+    // Strip of dimmed thread a drawer must leave beside itself. Small enough
+    // not to be a design, big enough to be a tap target: the backdrop is how
+    // the drawer is dismissed, and a drawer that covers it leaves the header
+    // ✕ as the only way out.
+    var DRAWER_PEEK = 56;
+
     function setWidth(width, persist) {
         // What the user chose. The window may not be wide enough to honour it
         // right now, but that is applyWidth()'s problem, not something to
@@ -928,21 +1018,39 @@
     }
 
     /**
+     * The widest a drawer may be.
+     *
+     * Not maxPanelWidth(): that one is about the thread beside the panel, and
+     * a drawer has none — it is over the thread, not next to it. Below 992px
+     * core turns .sidebar-2col into a full-width bar, so maxPanelWidth() comes
+     * out around -450 there. What caps a drawer is the screen.
+     *
+     * @return int Always within WIDTH_MIN..WIDTH_MAX, so anything it produces
+     *             is also a legal column width for the desktop to inherit.
+     */
+    function maxDrawerWidth() {
+        return Math.max(WIDTH_MIN, Math.min(WIDTH_MAX, $(window).width() - DRAWER_PEEK));
+    }
+
+    /**
      * Publish the width the panel actually gets.
      *
      * Drives both the panel and the shift applied to the conversation layout,
      * so the two can never disagree.
      *
-     * In push mode the stored width is capped to what the thread can spare: a
-     * panel dragged out to 900px on a wide monitor has to give some of that
-     * back on a smaller one. In overlay mode there is nothing to divide up —
-     * the drawer floats over the thread and the stylesheet caps it at the
-     * viewport.
+     * Both shapes cap the stored width rather than rewriting it, and for the
+     * same reason: a panel dragged out to 900px on a wide monitor has to give
+     * some of that back on a smaller one, and give it straight back when the
+     * room returns. What they cap against differs — a column is bounded by the
+     * thread it must leave readable, a drawer by the screen it must leave a
+     * strip of.
      */
     function applyWidth() {
         var width = panel.pref_width;
 
-        if (!isOverlay()) {
+        if (isDrawer()) {
+            width = Math.min(width, maxDrawerWidth());
+        } else if (!isOverlay()) {
             width = Math.max(WIDTH_MIN, Math.min(width, maxPanelWidth()));
         }
 
@@ -953,16 +1061,40 @@
     // Floating window
     // ---------------------------------------------------------------------
 
+    // Whether this user has ever placed a window with their own hands, rather
+    // than merely carrying MODE_DEFAULT. Set from the stored geometry in
+    // initPanel() and by togglePanelMode() the moment they undock.
+    var placed_float = false;
+
     /**
-     * Whether the panel is a window rather than a column right now.
+     * Whether the panel is a window rather than a column or a drawer.
      *
-     * The stored shape only applies where there is room for a window and a
-     * mouse to drag it with. Below the overlay breakpoint the drawer wins, in
-     * exactly the way it wins over the stored open state — and, in exactly the
-     * same way, that never writes the preference back.
+     * A desktop *seeds* a window from the stored shape alone; a tablet only
+     * ever *restores* one the user actually placed. The distinction matters
+     * because MODE_DEFAULT is MODE_FLOATING and the pin used to be hidden below
+     * the switch: every existing tablet user is carrying a "floating" nobody
+     * chose, and handing them a 420px window where they have a drawer today
+     * would be a regression dressed up as a feature. The geometry columns are
+     * the evidence — null until the first undock, which is what placed_float
+     * reads.
+     *
+     * A phone gets neither. There is nothing to drag a window over.
      */
     function isFloating() {
-        return panel.pref_mode === MODE_FLOATING && !isOverlay();
+        if (isPhone()) {
+            return false;
+        }
+
+        if (panel.pref_mode !== MODE_FLOATING) {
+            return false;
+        }
+
+        // Room for a column means room for a window, no questions asked.
+        if (!isOverlay()) {
+            return true;
+        }
+
+        return placed_float;
     }
 
     /**
@@ -1014,8 +1146,24 @@
         return Math.max(FLOAT_WIDTH_MIN, Math.min(width, Math.min(FLOAT_WIDTH_MAX, $(window).width())));
     }
 
+    /**
+     * The height the user can actually see, keyboard and all.
+     *
+     * $(window).height() is the layout viewport, which a software keyboard does
+     * not touch. visualViewport is the part of it that is not covered.
+     *
+     * Rounded, because visualViewport reports fractions of a pixel and the
+     * geometry made from it is stored in an integer column: without this the
+     * window is drawn a third of a pixel from where the server was told it is.
+     *
+     * @return int
+     */
+    function viewportHeight() {
+        return Math.round((window.visualViewport && window.visualViewport.height) || $(window).height());
+    }
+
     function clampFloatHeight(height) {
-        return Math.max(FLOAT_HEIGHT_MIN, Math.min(height, Math.min(FLOAT_HEIGHT_MAX, $(window).height())));
+        return Math.max(FLOAT_HEIGHT_MIN, Math.min(height, Math.min(FLOAT_HEIGHT_MAX, viewportHeight())));
     }
 
     /**
@@ -1043,7 +1191,9 @@
         };
 
         box.x = Math.max(0, Math.min(box.x, $(window).width() - box.w));
-        box.y = Math.max(0, Math.min(box.y, $(window).height() - box.h));
+        // Against what can be seen rather than what has been laid out, so a
+        // software keyboard lifts the window instead of burying its composer.
+        box.y = Math.max(0, Math.min(box.y, viewportHeight() - box.h));
 
         return box;
     }
@@ -1094,7 +1244,14 @@
 
         var $pin = panel.$el.find('.aicp-pin');
 
-        $pin.attr('title', floating ? t('dock') : t('undock'));
+        // What pinning gives you back depends on the band: a column where
+        // there is room for one, the drawer where there is not. "Dock" would
+        // be a lie on a tablet, where the panel has no column to return to.
+        var label = isOverlay()
+            ? (floating ? t('as_drawer') : t('as_window'))
+            : (floating ? t('dock') : t('undock'));
+
+        $pin.attr('title', label);
         $pin.find('.glyphicon')
             .toggleClass('glyphicon-new-window', !floating)
             .toggleClass('glyphicon-pushpin', floating);
@@ -1112,9 +1269,9 @@
      * undock survives a reload even if the window is never touched afterwards.
      */
     function togglePanelMode() {
-        // The button is hidden in the drawer, but a stray click must not store
-        // a shape the user cannot see.
-        if (isOverlay()) {
+        // The button is hidden on a phone, but a stray click must not store a
+        // shape the user cannot see.
+        if (isPhone()) {
             return;
         }
 
@@ -1123,7 +1280,24 @@
         var data = {panel_mode: panel.pref_mode};
         var seeded = panel.pref_mode === MODE_FLOATING && !panel.float;
 
+        // Before applyMode(), which asks isFloating(), which asks this on a
+        // tablet. Set it afterwards and the class never lands, the window never
+        // appears, and the button reads as broken.
+        if (panel.pref_mode === MODE_FLOATING) {
+            placed_float = true;
+        }
+
         applyMode();
+
+        // The shape just changed under applyLayoutMode()'s feet without a
+        // resize to notice it. Publish the new band and re-seed the memo by
+        // hand: leaving it stale would have the next scroll frame read a
+        // transition into the drawer and close the panel that was just pinned.
+        applyDrawerClass();
+        last_drawer = isDrawer();
+        $('.aicp-backdrop').toggleClass(
+            'hidden', !(last_drawer && $('body').hasClass('aicp-open'))
+        );
 
         if (seeded) {
             data = $.extend(data, floatPrefs());
@@ -1141,105 +1315,220 @@
         };
     }
 
-    function bindResizer() {
-        var dragging = false;
+    // How far a finger may wander before a press becomes a drag. A mouse gets
+    // none of it: a mouse that moved meant to move. A tap that jitters two
+    // pixels would otherwise nudge the window and post a preference for it.
+    var DRAG_SLOP = 6;
 
-        panel.$el.find('.aicp-resizer').on('mousedown', function (e) {
-            // The grip is hidden in the other two shapes; this keeps the two
-            // drag implementations provably exclusive all the same.
-            if (isFloating()) {
+    /**
+     * Run one pointer drag, captured on the element it started on.
+     *
+     * Pointer events rather than mouse events, because a finger on a mouse-only
+     * handler scrolls the page instead: the emulated mouse events a touch
+     * screen sends arrive late and only for taps, never for drags.
+     *
+     * setPointerCapture() is what makes a 6px grip draggable at all. Once the
+     * pointer is captured the moves keep arriving at the grip however far the
+     * finger strays from it, which is why none of this needs a listener on the
+     * document the way the three mouse implementations each did.
+     *
+     * @param jQuery      $target   what to bind on
+     * @param string|null selector  delegate to this, or null to bind directly
+     * @param object      options   start(e) — return false to decline the drag;
+     *                              arm() — it has really started;
+     *                              move(dx, dy, event);
+     *                              end(committed)
+     */
+    function bindPointerDrag($target, selector, options) {
+        var drag = null;
+
+        function follow(e) {
+            var oe = e.originalEvent || e;
+
+            if (!drag || oe.pointerId !== drag.id) {
+                return;
+            }
+
+            var dx = oe.clientX - drag.x;
+            var dy = oe.clientY - drag.y;
+
+            if (!drag.armed) {
+                if (Math.abs(dx) < DRAG_SLOP && Math.abs(dy) < DRAG_SLOP) {
+                    return;
+                }
+
+                drag.armed = true;
+                options.arm();
+            }
+
+            options.move(dx, dy, oe);
+        }
+
+        function release(e) {
+            var oe = e.originalEvent || e;
+
+            if (!drag || oe.pointerId !== drag.id) {
+                return;
+            }
+
+            var armed = drag.armed;
+            var el = drag.el;
+            var id = drag.id;
+
+            drag = null;
+            $(el).off('.aicpdrag');
+
+            try {
+                if (el.hasPointerCapture && el.hasPointerCapture(id)) {
+                    el.releasePointerCapture(id);
+                }
+            } catch (err) {
+                // The pointer is already gone. Nothing left to release.
+            }
+
+            // A cancel is the system taking the gesture away — a rotation, a
+            // second finger, the home swipe. Whatever is on screen stays there,
+            // but the user did not choose it, so nothing is stored.
+            options.end(armed && e.type === 'pointerup');
+        }
+
+        function grab(e) {
+            var oe = e.originalEvent || e;
+
+            // Primary button, primary contact. Without the second test the
+            // other finger of a pinch starts a drag of its own and overwrites
+            // the first one's origin halfway through the gesture.
+            if (oe.button || oe.isPrimary === false) {
+                return;
+            }
+
+            if (options.start.call(this, e) === false) {
                 return;
             }
 
             e.preventDefault();
-            dragging = true;
-            $('body').addClass('aicp-resizing');
-        });
 
-        $(document).on('mousemove', function (e) {
-            if (!dragging) {
-                return;
+            drag = {
+                el: this,
+                id: oe.pointerId,
+                x: oe.clientX,
+                y: oe.clientY,
+                armed: !oe.pointerType || oe.pointerType === 'mouse'
+            };
+
+            if (drag.armed) {
+                options.arm();
             }
 
-            setWidth($(window).width() - e.pageX, false);
-        });
-
-        $(document).on('mouseup', function () {
-            if (!dragging) {
-                return;
+            try {
+                this.setPointerCapture(oe.pointerId);
+            } catch (err) {
+                // No capture available. The drag still works while the pointer
+                // stays over the element, which is what a mouse does anyway.
             }
 
-            dragging = false;
-            $('body').removeClass('aicp-resizing');
+            $(this).on('pointermove.aicpdrag', follow)
+                   .on('pointerup.aicpdrag pointercancel.aicpdrag', release);
+        }
 
-            var current = parseInt(
-                getComputedStyle(document.documentElement).getPropertyValue('--aicp-width'), 10
-            );
+        $target.on('pointerdown', selector, grab);
+    }
 
-            setWidth(current, true);
+    function bindResizer() {
+        // What the drag produced, as opposed to what the stylesheet drew. Null
+        // until the pointer has actually moved, so a click on the grip that
+        // goes nowhere does not store a width nobody chose.
+        var chosen = null;
+
+        bindPointerDrag(panel.$el.find('.aicp-resizer'), null, {
+            start: function () {
+                chosen = null;
+
+                // The grip is hidden in the other two shapes; this keeps the
+                // drag implementations provably exclusive all the same.
+                return !isFloating() && !isPhone();
+            },
+            arm: function () {
+                $('body').addClass('aicp-resizing');
+            },
+            move: function (dx, dy, oe) {
+                // clientX, not pageX: the panel is position:fixed, so its frame
+                // is the viewport. The two part company as soon as the page is
+                // scrolled sideways, which one wide quoted table is enough to
+                // do.
+                chosen = $(window).width() - oe.clientX;
+
+                // A drawer is capped where it is dragged, not only where it is
+                // drawn. max-width:100% would hide an over-drag from the eye
+                // and store it anyway — and the stored number is the desktop
+                // column's width.
+                if (isDrawer()) {
+                    chosen = Math.min(chosen, maxDrawerWidth());
+                }
+
+                setWidth(chosen, false);
+            },
+            end: function (committed) {
+                $('body').removeClass('aicp-resizing');
+
+                if (committed && chosen !== null) {
+                    setWidth(chosen, true);
+                }
+            }
         });
     }
 
     /**
      * Move the floating window by its header.
-     *
-     * Mouse events only, like bindResizer(): the window is a desktop shape, and
-     * the drawer is what a touch screen gets.
      */
     function bindFloatDrag() {
-        var dragging = false;
         var origin = null;
 
-        panel.$el.find('.aicp-header').on('mousedown', function (e) {
-            if (!isFloating() || e.which !== 1) {
-                return;
+        bindPointerDrag(panel.$el.find('.aicp-header'), null, {
+            start: function (e) {
+                if (!isFloating()) {
+                    return false;
+                }
+
+                // The model picker and the header buttons are controls, not a
+                // grip. This has to stay in front of the helper's
+                // preventDefault(): a prevented pointerdown on a <select> can
+                // stop iPadOS opening the picker at all.
+                if ($(e.target).closest('button, select, input, textarea, label, a, [role="button"]').length) {
+                    return false;
+                }
+
+                // From where the window is, not from where it is stored: after
+                // a spell on a smaller screen the two differ, and the drag has
+                // to follow the one the user can see.
+                var box = fitFloat();
+
+                origin = {x: box.x, y: box.y};
+            },
+            arm: function () {
+                $('body').addClass('aicp-dragging');
+            },
+            move: function (dx, dy) {
+                panel.float.x = origin.x + dx;
+                panel.float.y = origin.y + dy;
+
+                applyFloat();
+            },
+            end: function (committed) {
+                $('body').removeClass('aicp-dragging');
+
+                if (!committed) {
+                    // Fit what is in memory even so. panel_float_x is unsigned,
+                    // and a drag writes raw coordinates that may be negative
+                    // until something fits them.
+                    panel.float = fitFloat();
+                    return;
+                }
+
+                // The user placed it here, so here is what gets stored.
+                panel.float = fitFloat();
+                savePrefs(floatPrefs());
             }
-
-            // The model picker and the header buttons are controls, not a grip.
-            if ($(e.target).closest('button, select, input, a').length) {
-                return;
-            }
-
-            e.preventDefault();
-
-            // From where the window is, not from where it is stored: after a
-            // spell on a smaller screen the two differ, and the drag has to
-            // follow the one the user can see.
-            var box = fitFloat();
-
-            dragging = true;
-            origin = {
-                page_x: e.pageX,
-                page_y: e.pageY,
-                x: box.x,
-                y: box.y
-            };
-
-            $('body').addClass('aicp-dragging');
-        });
-
-        $(document).on('mousemove', function (e) {
-            if (!dragging) {
-                return;
-            }
-
-            panel.float.x = origin.x + (e.pageX - origin.page_x);
-            panel.float.y = origin.y + (e.pageY - origin.page_y);
-
-            applyFloat();
-        });
-
-        $(document).on('mouseup', function () {
-            if (!dragging) {
-                return;
-            }
-
-            dragging = false;
-            $('body').removeClass('aicp-dragging');
-
-            // The user placed it here, so here is what gets stored.
-            panel.float = fitFloat();
-            savePrefs(floatPrefs());
         });
     }
 
@@ -1267,79 +1556,81 @@
     function bindFloatResize() {
         var direction = null;
         var origin = null;
+        var with_mouse = false;
 
-        panel.$el.on('mousedown', '.aicp-fresize', function (e) {
-            if (!isFloating() || e.which !== 1) {
-                return;
+        bindPointerDrag(panel.$el, '.aicp-fresize', {
+            start: function (e) {
+                if (!isFloating()) {
+                    return false;
+                }
+
+                var match = ($(this).attr('class') || '').match(/aicp-fresize-([a-z]+)/);
+
+                if (!match) {
+                    return false;
+                }
+
+                var box = fitFloat();
+                var type = (e.originalEvent || e).pointerType;
+
+                direction = match[1];
+                with_mouse = !type || type === 'mouse';
+                origin = {
+                    x: box.x,
+                    y: box.y,
+                    w: box.w,
+                    h: box.h
+                };
+            },
+            arm: function () {
+                $('body').addClass('aicp-fresizing');
+
+                // A cursor is a mouse's business. Setting one for a finger
+                // leaves it on the page after the drag, over nothing.
+                if (with_mouse) {
+                    document.body.style.cursor = FLOAT_CURSORS[direction] || 'auto';
+                }
+            },
+            move: function (dx, dy) {
+                if (direction.indexOf('e') !== -1) {
+                    panel.float.w = origin.w + dx;
+                }
+
+                if (direction.indexOf('s') !== -1) {
+                    panel.float.h = origin.h + dy;
+                }
+
+                // Clamp here rather than leaving it to applyFloat(): what the
+                // grip does not take off the size it must not add to the
+                // position either, or the far edge creeps once the minimum is
+                // reached.
+                if (direction.indexOf('w') !== -1) {
+                    panel.float.w = clampFloatWidth(origin.w - dx);
+                    panel.float.x = origin.x + origin.w - panel.float.w;
+                }
+
+                if (direction.indexOf('n') !== -1) {
+                    panel.float.h = clampFloatHeight(origin.h - dy);
+                    panel.float.y = origin.y + origin.h - panel.float.h;
+                }
+
+                applyFloat();
+            },
+            end: function (committed) {
+                direction = null;
+                $('body').removeClass('aicp-fresizing');
+                document.body.style.cursor = '';
+
+                if (!committed) {
+                    // As in bindFloatDrag(): fitted so nothing negative can be
+                    // left behind, stored only when the user meant it.
+                    panel.float = fitFloat();
+                    return;
+                }
+
+                panel.float = fitFloat();
+                savePrefs(floatPrefs());
             }
-
-            var match = ($(this).attr('class') || '').match(/aicp-fresize-([a-z]+)/);
-
-            if (!match) {
-                return;
-            }
-
-            e.preventDefault();
-
-            var box = fitFloat();
-
-            direction = match[1];
-            origin = {
-                page_x: e.pageX,
-                page_y: e.pageY,
-                x: box.x,
-                y: box.y,
-                w: box.w,
-                h: box.h
-            };
-
-            $('body').addClass('aicp-fresizing');
-            document.body.style.cursor = FLOAT_CURSORS[direction] || 'auto';
-        });
-
-        $(document).on('mousemove', function (e) {
-            if (!direction) {
-                return;
-            }
-
-            var dx = e.pageX - origin.page_x;
-            var dy = e.pageY - origin.page_y;
-
-            if (direction.indexOf('e') !== -1) {
-                panel.float.w = origin.w + dx;
-            }
-
-            if (direction.indexOf('s') !== -1) {
-                panel.float.h = origin.h + dy;
-            }
-
-            // Clamp here rather than leaving it to applyFloat(): what the grip
-            // does not take off the size it must not add to the position
-            // either, or the far edge creeps once the minimum is reached.
-            if (direction.indexOf('w') !== -1) {
-                panel.float.w = clampFloatWidth(origin.w - dx);
-                panel.float.x = origin.x + origin.w - panel.float.w;
-            }
-
-            if (direction.indexOf('n') !== -1) {
-                panel.float.h = clampFloatHeight(origin.h - dy);
-                panel.float.y = origin.y + origin.h - panel.float.h;
-            }
-
-            applyFloat();
-        });
-
-        $(document).on('mouseup', function () {
-            if (!direction) {
-                return;
-            }
-
-            direction = null;
-            $('body').removeClass('aicp-fresizing');
-            document.body.style.cursor = '';
-
-            panel.float = fitFloat();
-            savePrefs(floatPrefs());
         });
     }
 

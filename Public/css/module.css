@@ -9,8 +9,10 @@
  * which means the module has exactly zero effect on core's layout.
  *
  * That shift only happens while there is genuinely room for a third column.
- * When there is not, module.js puts .aicp-overlay on <body> and the panel
- * becomes a drawer over the thread instead — see the bottom of this file.
+ * When there is not, the panel takes whichever of the other two shapes the user
+ * asked for — a drawer over the thread (.aicp-overlay) or a window they placed
+ * themselves (.aicp-floating) — and on a phone (.aicp-phone) it is always the
+ * drawer. See the bottom of this file.
  */
 
 :root {
@@ -128,6 +130,7 @@ body.aicp-open .content-2col {
 }
 
 body.aicp-resizing {
+    -webkit-user-select: none;
     user-select: none;
     cursor: col-resize;
 }
@@ -140,6 +143,12 @@ body.aicp-resizing {
     height: 100%;
     cursor: col-resize;
     z-index: 2;
+    /* The compositor decides whether a touch is a scroll before any handler
+       runs, so preventDefault() in pointerdown is too late to stop it. This is
+       what actually hands the gesture to bindPointerDrag(). */
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 .aicp-resizer:hover {
@@ -157,9 +166,10 @@ body.aicp-resizing {
    by all four sides instead of hanging off the right edge — so it stops being
    a column and the conversation gets its full width back.
 
-   .aicp-floating and .aicp-overlay are mutually exclusive: isFloating() is
-   false whenever isOverlay() is true, so a window is never asked to be a
-   drawer at the same time.
+   .aicp-floating and .aicp-overlay are mutually exclusive: isDrawer() is
+   isOverlay() && !isFloating(), so a window is never asked to be a drawer at
+   the same time. The z-index stack below depends on that — see the note on
+   z-index: 1030.
    =================================================================== */
 
 body.aicp-floating .aicp-panel {
@@ -170,7 +180,12 @@ body.aicp-floating .aicp-panel {
     width: var(--aicp-float-w);
     height: var(--aicp-float-h);
     /* Over core's navbar (1000) — a window the user placed themselves should
-       not be sliced by it — and under Bootstrap's modal backdrop (1040). */
+       not be sliced by it — and under Bootstrap's modal backdrop (1040).
+
+       It is also under the drawer's own backdrop at 1040, which is only safe
+       because the two shapes are mutually exclusive: openPanel() shows that
+       backdrop on isDrawer(), never merely on isOverlay(). Widen that test and
+       a window on a tablet is buried by a dimmer. */
     z-index: 1030;
     border: 1px solid #d6dde3;
     border-radius: 4px;
@@ -191,6 +206,14 @@ body.aicp-floating .aicp-resizer {
 body.aicp-floating .aicp-header {
     cursor: move;
     border-radius: 3px 3px 0 0;
+    /* The header is the window's drag surface, so a touch that lands on it
+       belongs to the drag and not to the page behind. -webkit-touch-callout is
+       the one touch-action does not cover: without it a press and hold raises
+       iOS's selection callout in the middle of a drag. */
+    touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 /* The controls in the header are still controls, not a drag surface. */
@@ -199,13 +222,16 @@ body.aicp-floating .aicp-header-actions {
 }
 
 body.aicp-dragging {
+    -webkit-user-select: none;
     user-select: none;
     cursor: move;
 }
 
 /* Set while an edge or a corner is being dragged. The cursor is put on <body>
-   inline for the duration, because which one it is depends on the grip. */
+   inline for the duration, because which one it is depends on the grip — and
+   only for a mouse, which is the only pointer that has one. */
 body.aicp-fresizing {
+    -webkit-user-select: none;
     user-select: none;
 }
 
@@ -216,6 +242,10 @@ body.aicp-fresizing {
     display: none;
     position: absolute;
     z-index: 3;
+    touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 body.aicp-floating .aicp-fresize {
@@ -788,17 +818,22 @@ body.aicp-floating .aicp-fresize {
 }
 
 /* ===================================================================
-   Narrow screens: overlay instead of squeezing the thread
+   Narrow screens: two shapes instead of squeezing the thread
 
    Whether the panel still fits as a column is not something a media query can
    answer. It depends on the panel's own width and on how much of the window
    core's two sidebars are taking — 260px of left nav until 991px, 280px of
    customer rail until 1100px — so a 1145px window is wide enough for the
    media query and still leaves the thread around 300px. module.js measures
-   all of it and puts .aicp-overlay on <body>; see isOverlay() and
-   maxPanelWidth(). Below core's own 1100px conversation breakpoint the class
-   is always set, because there core has stopped floating
-   #conv-layout-customer beside the thread too.
+   all of it; see isOverlay() and maxPanelWidth(). Below core's own 1100px
+   conversation breakpoint there is never room, because there core has stopped
+   floating #conv-layout-customer beside the thread too.
+
+   No room for a column is not the same as no room for the panel. Above 767px
+   the user still chooses its shape with the pin — the drawer below, or a
+   window they place themselves — so .aicp-overlay means "drawer", not "narrow":
+   applyDrawerClass() sets it on isDrawer(), which is isOverlay() && !isFloating().
+   The band's floor is .aicp-phone, and that one is a plain viewport question.
    =================================================================== */
 
 body.aicp-overlay .aicp-panel {
@@ -814,14 +849,19 @@ body.aicp-overlay .aicp-panel {
     z-index: 1045;
 }
 
-body.aicp-overlay .aicp-resizer {
+/* A phone gets one shape and no handles on it. There is nothing to drag a
+   window over at 375px, and the drawer is already the whole screen — so the
+   pin would offer a choice that does not exist and the grip would resize a
+   thing that cannot be resized. Everything above this floor keeps both: a
+   drawer on a tablet is dragged wider by its edge, and undocked by its pin.
+
+   The stored shape is left alone either way, the same way it is left alone by
+   the stored open state. */
+body.aicp-phone .aicp-resizer {
     display: none;
 }
 
-/* No undocking where there is no room to put a window, and no dragging one
-   with a finger. The stored shape is left alone — the drawer simply wins here,
-   the same way it wins over the stored open state. */
-body.aicp-overlay .aicp-pin {
+body.aicp-phone .aicp-pin {
     display: none;
 }
 
@@ -845,5 +885,99 @@ body.aicp-overlay.aicp-open .aicp-backdrop {
 @media (max-width: 767px) {
     .aicp-panel {
         width: 100%;
+    }
+}
+
+/* ===================================================================
+   Fingers
+
+   The grips were drawn for a mouse: 6px edges and 14px corners, which a cursor
+   finds exactly and a fingertip cannot. They have no background, so making
+   them bigger costs nothing visually — there is nothing to see either way.
+
+   (pointer: coarse) rather than a width query, because it is the input that is
+   imprecise and not the screen: a touchscreen laptop needs this at 1400px and
+   a mouse plugged into a tablet does not need it at 900px.
+   =================================================================== */
+
+@media (pointer: coarse) {
+    .aicp-resizer {
+        left: -10px;
+        width: 20px;
+        /* Clear of the header. At 6px this overlapped nothing worth having; at
+           20px it would sit on top of the window's own drag surface and swallow
+           the first 20px of it. */
+        top: 53px;
+        height: calc(100% - 53px);
+    }
+
+    .aicp-fresize-n,
+    .aicp-fresize-s {
+        height: 16px;
+    }
+
+    .aicp-fresize-n {
+        top: -8px;
+    }
+
+    .aicp-fresize-s {
+        bottom: -8px;
+    }
+
+    .aicp-fresize-e,
+    .aicp-fresize-w {
+        width: 16px;
+    }
+
+    .aicp-fresize-e {
+        right: -8px;
+    }
+
+    .aicp-fresize-w {
+        left: -8px;
+    }
+
+    .aicp-fresize-ne,
+    .aicp-fresize-nw,
+    .aicp-fresize-se,
+    .aicp-fresize-sw {
+        width: 28px;
+        height: 28px;
+    }
+
+    .aicp-fresize-ne {
+        top: -10px;
+        right: -10px;
+    }
+
+    .aicp-fresize-nw {
+        top: -10px;
+        left: -10px;
+    }
+
+    .aicp-fresize-se {
+        bottom: -10px;
+        right: -10px;
+    }
+
+    .aicp-fresize-sw {
+        bottom: -10px;
+        left: -10px;
+    }
+
+    /* Where to put the finger. A mouse gets cursor:move on hover and finds the
+       drag surface that way; a finger has no hover, and the header is mostly
+       controls, so without this the one part of it that can be dragged looks
+       exactly like the parts that cannot. */
+    body.aicp-floating .aicp-header-title::before {
+        content: '';
+        display: inline-block;
+        width: 8px;
+        height: 16px;
+        margin-right: 6px;
+        vertical-align: -3px;
+        background-image: radial-gradient(#8ab4d8 1px, transparent 1.2px);
+        background-size: 4px 4px;
+        opacity: .8;
     }
 }
