@@ -27,8 +27,18 @@ use App\Thread;
  * The collector is armed only inside AiChatPanel requests, so an ordinary
  * autosave still broadcasts nothing.
  *
- * It records ids, never HTML. Rendering happens later, in the receiving user's
- * poll request, inside RealtimeConvNewThread::processPayload().
+ * For *other* browsers that is the whole story: the ids travel, and rendering
+ * happens later in the receiving user's poll request, inside
+ * RealtimeConvNewThread::processPayload().
+ *
+ * For the browser that asked for the change it is not enough, and used not to
+ * work at all. Showing a change this module made, in a request this module is
+ * answering, went through polycast being connected, the poke landing, a poll
+ * round trip, core's channel dispatch and the module's second subscriber —
+ * five links, all of which have to hold, for something already known here. So
+ * the change set also carries the rendered thread HTML, produced by the very
+ * view core's poll would have used, and the panel applies it to the page it is
+ * already talking to. Polycast keeps the job only polycast can do.
  */
 class ChangeCollector
 {
@@ -300,10 +310,52 @@ class ChangeCollector
             $changes['updated_thread_ids'] = $updated;
         }
 
+        // The rendered blocks, so the browser that asked for the change can put
+        // it on screen without waiting for a poll that may never arrive. Built
+        // here rather than in noteThread() so it reflects the thread as it is
+        // now: a draft created and then rewritten in the same turn is recorded
+        // once and must still render its final text.
+        $threads = [];
+
+        foreach ($thread_ids as $thread_id) {
+            $thread = Thread::find($thread_id);
+
+            if (!$thread) {
+                continue;
+            }
+
+            $html = $this->renderThread($thread);
+
+            if ($html === null) {
+                continue;
+            }
+
+            $threads[] = [
+                'id'      => (int) $thread->id,
+                'html'    => $html,
+                'updated' => in_array($thread->id, $this->updated_thread_ids),
+            ];
+        }
+
+        if ($threads) {
+            $changes['threads'] = $threads;
+        }
+
         // Only when the draft is part of *this* payload, so the panel does not
         // offer to open it twice.
         if ($this->draft_thread_id && in_array($this->draft_thread_id, $thread_ids)) {
             $changes['draft_thread_id'] = $this->draft_thread_id;
+
+            // What the reply editor wants, which is not the block above: core's
+            // own load_draft action hands the editor exactly this column
+            // (core/app/Http/Controllers/ConversationsController.php:1764).
+            // Sending it here saves the panel a second round trip when the
+            // draft the assistant just rewrote is the one open in the editor.
+            $draft = Thread::find($this->draft_thread_id);
+
+            if ($draft && $draft->state == Thread::STATE_DRAFT && $this->mayView($draft)) {
+                $changes['draft_body'] = (string) $draft->body;
+            }
         }
 
         if ($include_conversation && $this->status !== null) {
@@ -315,6 +367,70 @@ class ChangeCollector
         }
 
         return $changes;
+    }
+
+    /**
+     * One thread as the conversation view renders it.
+     *
+     * Deliberately the same view core's poll uses
+     * (RealtimeConvNewThread::processPayload(), core/app/Events/RealtimeConvNewThread.php:110),
+     * behind the same permission check, so a thread inserted from a change set
+     * and the same thread inserted from a poll are byte-for-byte identical and
+     * there is only one piece of markup to keep working.
+     *
+     * @param Thread $thread
+     *
+     * @return string|null Null when it cannot be rendered, which costs the user
+     *                     a reload rather than the turn.
+     */
+    protected function renderThread(Thread $thread)
+    {
+        try {
+            if (!$this->mayView($thread)) {
+                return null;
+            }
+
+            $conversation = $thread->conversation;
+
+            return \View::make('conversations/partials/threads')->with([
+                'conversation' => $conversation,
+                'mailbox'      => $conversation->mailbox,
+                'threads'      => [$thread],
+            ])->render();
+        } catch (\Exception $e) {
+            \Helper::logException($e, '[AiChatPanel] Rendering a changed thread failed: ');
+
+            return null;
+        }
+    }
+
+    /**
+     * Whether the acting user may see the conversation this thread is on.
+     *
+     * The same guard core applies before it renders a thread into a poll
+     * response, for the same reason: the change set travels to a browser, and
+     * what a browser may be told is decided by who is holding it, not by what
+     * the assistant happened to touch.
+     *
+     * @param Thread $thread
+     *
+     * @return bool
+     */
+    protected function mayView(Thread $thread)
+    {
+        $user = auth()->user();
+
+        if (!$user) {
+            return false;
+        }
+
+        $conversation = $thread->conversation;
+
+        if (!$conversation || !$conversation->mailbox) {
+            return false;
+        }
+
+        return $user->can('view', $conversation);
     }
 
     /**

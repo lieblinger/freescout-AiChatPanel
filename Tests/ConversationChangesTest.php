@@ -14,9 +14,16 @@ use Modules\AiChatPanel\Services\Tools\ToolRegistry;
  *
  * The module does not build its own refresh channel. It records what a turn
  * changed and dispatches core's own App\Events\RealtimeConvNewThread, which
- * core renders, authorises and inserts. These tests cover the recording, the
- * broadcast, and the one rule that must not regress: nothing broadcasts unless
- * an AI turn armed the collector.
+ * core renders, authorises and inserts, so other browsers find out.
+ *
+ * For the browser that asked for the change it does not wait on that: the
+ * change set carries the rendered blocks, produced by the same view behind the
+ * same permission check, so the page updates from the response it is already
+ * reading.
+ *
+ * These tests cover the recording, the rendering, the broadcast, and the one
+ * rule that must not regress: nothing broadcasts or renders unless an AI turn
+ * armed the collector.
  */
 class ConversationChangesTest extends AiChatPanelTestCase
 {
@@ -454,6 +461,136 @@ class ConversationChangesTest extends AiChatPanelTestCase
     }
 
     // =====================================================================
+    // What rides out on the response
+    // =====================================================================
+
+    public function testTheChangeSetCarriesTheRenderedDraft()
+    {
+        $this->actingAs($this->agent);
+        $this->collector()->arm($this->conversation->id);
+
+        $this->runTool('conversation_create_draft_reply', ['body' => 'Sorry for the delay.']);
+
+        $draft = Thread::where('conversation_id', $this->conversation->id)
+            ->where('state', Thread::STATE_DRAFT)
+            ->first();
+
+        $changes = $this->collector()->snapshot();
+
+        $this->assertArrayHasKey('threads', $changes, 'The panel cannot show a draft it was only given the id of.');
+
+        $rendered = collect($changes['threads'])->firstWhere('id', (int) $draft->id);
+
+        $this->assertNotNull($rendered);
+        $this->assertStringContainsString('id="thread-'.$draft->id.'"', $rendered['html']);
+        $this->assertStringContainsString('Sorry for the delay.', $rendered['html']);
+        $this->assertFalse($rendered['updated']);
+    }
+
+    /**
+     * The case the whole change actually exists for: a rewrite has no insert
+     * path in core at all, so if the new text does not ride out here the agent
+     * only ever sees it by reloading the page.
+     */
+    public function testTheChangeSetCarriesTheRewrittenDraftMarkedUpdated()
+    {
+        $this->actingAs($this->agent);
+        $this->setSettings(['tools_enabled' => [
+            'conversation_create_draft_reply',
+            'conversation_update_draft',
+        ]]);
+
+        $this->collector()->arm($this->conversation->id);
+        $this->runTool('conversation_create_draft_reply', ['body' => 'First attempt.']);
+
+        $draft = Thread::where('conversation_id', $this->conversation->id)
+            ->where('state', Thread::STATE_DRAFT)
+            ->first();
+
+        // A fresh turn, so the edit lands on a thread the browser has seen.
+        app()->forgetInstance(ChangeCollector::class);
+        $this->collector()->arm($this->conversation->id);
+
+        $this->runTool('conversation_update_draft', ['body' => 'Second attempt, better.']);
+
+        $changes = $this->collector()->snapshot();
+        $rendered = collect($changes['threads'])->firstWhere('id', (int) $draft->id);
+
+        $this->assertNotNull($rendered);
+        $this->assertTrue($rendered['updated'], 'The panel replaces a rendered thread only when it is told the thread already existed.');
+        $this->assertStringContainsString('Second attempt', $rendered['html']);
+        $this->assertStringNotContainsString('First attempt', $rendered['html']);
+    }
+
+    /**
+     * The thread block is not what the reply editor wants. When the rewritten
+     * draft is the one open in the editor the panel has to put the new text
+     * into Summernote, and core's own load_draft action hands it exactly this
+     * column.
+     */
+    public function testTheChangeSetCarriesTheDraftBodyForTheEditor()
+    {
+        $this->actingAs($this->agent);
+        $this->collector()->arm($this->conversation->id);
+
+        $this->runTool('conversation_create_draft_reply', ['body' => 'Sorry for the delay.']);
+
+        $draft = Thread::where('conversation_id', $this->conversation->id)
+            ->where('state', Thread::STATE_DRAFT)
+            ->first();
+
+        $changes = $this->collector()->snapshot();
+
+        $this->assertArrayHasKey('draft_body', $changes);
+        $this->assertSame($draft->body, $changes['draft_body']);
+    }
+
+    /**
+     * Rendering happens when the payload is built, not when the thread is
+     * recorded, so a draft written and then rewritten inside one turn shows the
+     * text it ended up with rather than the text it started as.
+     */
+    public function testARewriteInTheSameTurnRendersTheFinalText()
+    {
+        $this->actingAs($this->agent);
+        $this->setSettings(['tools_enabled' => [
+            'conversation_create_draft_reply',
+            'conversation_update_draft',
+        ]]);
+
+        $this->collector()->arm($this->conversation->id);
+
+        $this->runTool('conversation_create_draft_reply', ['body' => 'First attempt.']);
+        $this->runTool('conversation_update_draft', ['body' => 'Second attempt, better.']);
+
+        $changes = $this->collector()->snapshot();
+
+        $this->assertCount(1, $changes['threads']);
+        $this->assertStringContainsString('Second attempt', $changes['threads'][0]['html']);
+        $this->assertStringContainsString('Second attempt', $changes['draft_body']);
+    }
+
+    /**
+     * The change set is rendered HTML now, so it carries a conversation's text
+     * rather than only its ids. It must be built for whoever is holding the
+     * browser, not for whoever the assistant was acting as.
+     */
+    public function testTheChangeSetRendersNothingForAnOutsider()
+    {
+        $this->actingAs($this->agent);
+        $this->collector()->arm($this->conversation->id);
+
+        $this->runTool('conversation_create_draft_reply', ['body' => 'Sorry for the delay.']);
+
+        $this->actingAs($this->outsider);
+
+        $changes = $this->collector()->snapshot();
+
+        $this->assertArrayNotHasKey('threads', $changes);
+        $this->assertArrayNotHasKey('draft_body', $changes);
+    }
+
+    // =====================================================================
     // Getting the change set to the browser
     // =====================================================================
 
@@ -552,6 +689,12 @@ class ConversationChangesTest extends AiChatPanelTestCase
         $this->assertNotNull($changes);
         $this->assertEquals($this->conversation->id, $changes['conversation_id']);
         $this->assertEquals($draft->id, $changes['draft_thread_id']);
+
+        // The whole point, over the wire: the panel gets the block and the
+        // editor text on the response it is already reading, so nothing about
+        // showing the draft depends on a poll arriving afterwards.
+        $this->assertStringContainsString('id="thread-'.$draft->id.'"', $changes['threads'][0]['html']);
+        $this->assertStringContainsString('Sorry for the delay.', $changes['draft_body']);
     }
 
     public function testRejectingAWriteReturnsNoChanges()

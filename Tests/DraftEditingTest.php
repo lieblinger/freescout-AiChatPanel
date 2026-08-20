@@ -398,14 +398,22 @@ class DraftEditingTest extends AiChatPanelTestCase
      */
     public function testThePanelLinksTheDraftUnderTheToolsCurrentName()
     {
-        $tool = new \Modules\AiChatPanel\Services\Tools\Builtin\CreateDraftReplyTool();
         $js = file_get_contents(__DIR__.'/../Public/js/module.js');
 
-        $this->assertStringContainsString(
-            "'".$tool->name()."'",
-            $js,
-            'module.js does not know the draft tool by its current name, so it cannot offer to open the draft.'
-        );
+        // Both tools, because both leave a draft worth opening. The update tool
+        // needs it most: the rewrite it made is the one the agent has not seen.
+        $tools = [
+            new \Modules\AiChatPanel\Services\Tools\Builtin\CreateDraftReplyTool(),
+            new \Modules\AiChatPanel\Services\Tools\Builtin\UpdateDraftTool(),
+        ];
+
+        foreach ($tools as $tool) {
+            $this->assertStringContainsString(
+                "'".$tool->name()."'",
+                $js,
+                'module.js does not know '.$tool->name().' by its current name, so it cannot offer to open the draft.'
+            );
+        }
     }
 
     public function testDraftsStayOutOfTheConversationHistory()

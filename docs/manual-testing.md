@@ -143,15 +143,38 @@ an empty list.
 The part worth checking carefully, because it is where the assistant edits work
 that already exists rather than adding to it.
 
+Nothing in steps 15–22 needs a page reload. If any of them only shows up after
+one, that is the bug this section exists to catch.
+
 15. Ask: `Draft a reply to the latest customer message.` Approve the
-    `conversation_create_draft_reply` card, then **reload the conversation** —
-    the panel does not refresh the thread itself. A draft appears with **Edit**
-    and **Discard** buttons.
+    `conversation_create_draft_reply` card. The draft arrives the way core
+    delivers any new thread — behind a **View new message** link — with **Edit**
+    and **Discard** buttons once it is opened. The activity row offers
+    **Open in editor**.
 16. Ask: `Make that draft two sentences shorter.` Expect two activity rows:
     `conversation_get_drafts` running without confirmation, then a confirmation
     card for `conversation_update_draft` saying it will *replace* the text.
-17. Approve and reload. **Same draft thread**, new text, nothing sent, and the
-    conversation is still in *Drafts* exactly once.
+17. Approve, with the draft block **visible on the page**. The block's text must
+    change and flash on the spot. **Same draft thread**, nothing sent, and the
+    conversation is still in *Drafts* exactly once. The activity row for the
+    update offers **Open in editor** too.
+
+    Then the same rewrite from the three other places it can land:
+
+    - Click **Edit** on the draft, type nothing, and ask for another rewrite.
+      The reply editor's contents must change and flash, and the hidden draft
+      block must stay hidden — it must not reappear under the form.
+    - Type a word into the editor, then ask for another rewrite. This time the
+      editor must **not** be overwritten: a bar appears above it offering
+      **Load the new text** or **Keep mine**. Check both. After loading the new
+      text, press Send and confirm the mail that went out is the assistant's
+      version, not the one the editor held before.
+    - Open the same conversation in a second tab and repeat the rewrite in the
+      first. The second tab must catch up within about five seconds, on its own
+      — that is the polycast path, a separate mechanism from the one above.
+    - Type `poly.disconnect();` in the console and repeat the rewrite. It must
+      still update instantly. The change rides on the response; polycast is
+      only how *other* browsers find out.
 18. In a single message, ask for two changes at once: `Make it shorter and more
     formal.` Both must be present in the result — if the second edit resurrects
     the pre-edit wording, the model is working from a stale copy rather than

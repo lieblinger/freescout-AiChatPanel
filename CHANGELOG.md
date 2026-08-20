@@ -20,6 +20,9 @@ runs with the module's other migrations.
 * Fix - Scrolling back through a chat while the assistant is writing works. The message list was pinned to the bottom on every token that arrived, so trying to re-read an earlier answer mid-answer pulled the view back down a few times a second, and again the moment the turn finished. It now follows new messages only when you are already at the bottom of the list; scroll up and your position is left alone.
 * New - A button to get back to the newest message, over the bottom of the list whenever you have scrolled away from it. It carries a count of what arrived while you were reading further up — tool activity, the answer itself, and a pending confirmation, which no longer waits for you off screen unannounced. Pressing it returns to the bottom and resumes following.
 * Fix - Reopening the panel lands on the newest message rather than wherever the browser happened to leave it.
+* Fix - A draft the assistant writes or rewrites appears without reloading the page. The conversation was left showing the old text — or no draft at all — until the agent reloaded, which is also how they found out that a rewrite they had asked for had happened. The change now travels on the reply the panel is already waiting for, so the draft block updates the moment the assistant finishes, whether or not the browser's live connection is working.
+* New - A rewrite reaches the reply editor when the draft is open in it. Until now the editor kept the text from before the rewrite, so the change was invisible and the next save or send quietly put the old wording back. If you have not typed since opening the draft, the new text simply appears; if you have, you are offered it above the editor and choose between it and your own — nothing you wrote is replaced without you saying so.
+* New - "Open in editor" is offered after a rewrite, not only after a draft is first written.
 
 ## 1.3.3
 

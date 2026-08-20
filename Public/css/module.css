@@ -658,6 +658,28 @@ body.aicp-floating .aicp-fresize {
 }
 
 /* ===================================================================
+   The bar offered above the reply editor when the assistant rewrote a
+   draft the agent had already started editing. It lives inside core's
+   reply block, so it is deliberately quieter than an alert normally is.
+   =================================================================== */
+
+.aicp-draft-notice {
+    margin-bottom: 10px;
+    padding: 8px 12px;
+    font-size: 13px;
+}
+
+.aicp-draft-notice .glyphicon {
+    margin-right: 4px;
+}
+
+.aicp-draft-notice a {
+    margin-left: 10px;
+    white-space: nowrap;
+    font-weight: bold;
+}
+
+/* ===================================================================
    Write confirmation
    =================================================================== */
 

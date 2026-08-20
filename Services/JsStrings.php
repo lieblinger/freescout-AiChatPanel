@@ -90,6 +90,12 @@ class JsStrings
             'close_reply_first'  => __('Close the open reply first.'),
             'close_note_first'   => __('Close the open note first, then insert as a reply.'),
 
+            // -- A draft the assistant rewrote while it was open in the editor -
+            'draft_refreshed'    => __('The assistant rewrote the draft in the editor.'),
+            'draft_rewritten'    => __('The assistant rewrote this draft. Your own changes are still in the editor.'),
+            'draft_reload'       => __('Load the new text'),
+            'draft_keep'         => __('Keep mine'),
+
             // -- Write confirmation --------------------------------------------
             'confirm_title'      => __('The assistant wants to make a change'),
             'approve'            => __('Approve'),

@@ -324,7 +324,17 @@
         buffer: '',
         $streamBubble: null,
         // Thread ids the assistant edited, awaiting fresh HTML from the poll.
-        updatedThreads: {}
+        updatedThreads: {},
+        // The draft currently loaded in the reply editor, and the editor's
+        // contents as they were the moment it was loaded. The baseline is what
+        // tells a draft the agent has not touched from one they have started
+        // editing, which decides whether the assistant's rewrite may replace
+        // what is in the editor or has to ask first.
+        //
+        // Core's fs_reply_changed cannot answer that: it is set by programmatic
+        // Summernote writes as well as by typing (main.js:1912) and is never
+        // reset when a draft is loaded.
+        editorDraft: null
     };
 
     function initPanel() {
@@ -2416,7 +2426,10 @@
         // The dotted spelling is what the tool was called before 1.3.0. Rows
         // written then are renamed by migration, but a panel left open across
         // the upgrade still holds them.
-        var draftTools = ['conversation_create_draft_reply', 'conversation.create_draft_reply'];
+        var draftTools = [
+            'conversation_create_draft_reply', 'conversation.create_draft_reply',
+            'conversation_update_draft', 'conversation.update_draft'
+        ];
 
         if (!ok || draftTools.indexOf(message.tool_name) === -1) {
             return '';
@@ -2776,8 +2789,10 @@
      * (core/public/js/main.js:3811) will render the thread, authorise the
      * recipient, insert the HTML and refresh the status and assignee widgets.
      *
-     * All this has to do is stop the browser waiting up to five seconds for the
-     * next poll. The change set carries ids only; it is a poke, not the data.
+     * That path is what other browsers get, and it is still poked below. This
+     * one does not depend on it: the change set carries the rendered blocks, so
+     * the page is updated from the response it is already reading rather than
+     * from a poll that has to survive five separate links to arrive.
      */
     function applyConversationChanges(changes) {
         if (!changes || !changes.conversation_id) {
@@ -2806,7 +2821,202 @@
             panel.updatedThreads[id] = true;
         });
 
+        applyRenderedThreads(changes.threads);
+        maybeRefreshEditorDraft(changes);
+
         pokeRealtime(changes.since);
+    }
+
+    /**
+     * Put the blocks the server rendered onto the page.
+     *
+     * Only threads already on screen are touched. A thread that is not in the
+     * DOM is genuinely new, and core owns how new threads arrive: it collects
+     * them behind a "View new message" trigger (main.js:3822) rather than
+     * pushing them under the reader's eyes. Inserting them here as well would
+     * both duplicate that and quietly change it.
+     */
+    function applyRenderedThreads(threads) {
+        $.each(threads || [], function (i, thread) {
+            if (!thread || !thread.id || !thread.html) {
+                return;
+            }
+
+            var $old = $('#thread-' + thread.id);
+
+            if (!$old.length) {
+                return;
+            }
+
+            // Core's editDraft() hides the block of the draft it opened
+            // (main.js:4620). The replacement must not pop it back into view
+            // underneath the form the agent is working in.
+            var wasHidden = !$old.is(':visible');
+            var $new = $(thread.html);
+
+            $old.replaceWith($new);
+
+            // The poll may still deliver this thread; without this the handler
+            // in bindRealtimeUpdates() would replace it a second time and flash
+            // a block the agent has already read.
+            delete panel.updatedThreads[thread.id];
+
+            if (wasHidden) {
+                $new.hide();
+            } else if (typeof flashElement === 'function') {
+                flashElement($new);
+            }
+        });
+    }
+
+    /**
+     * Bring the reply editor up to date when the draft it holds was rewritten.
+     *
+     * Replacing the thread block is not enough here: core's editDraft() hides
+     * that block while the draft is being edited, so the agent is looking at
+     * the editor and would see nothing at all. Worse, the editor would still
+     * hold the pre-edit text, and the next autosave or Send would write it back
+     * over the rewrite.
+     *
+     * What it must not do is throw away work. The editor is replaced outright
+     * only when the agent has not touched it since the draft was loaded;
+     * otherwise they are offered the new text and decide themselves.
+     */
+    function maybeRefreshEditorDraft(changes) {
+        var threadId = changes.draft_thread_id;
+
+        if (!threadId || typeof changes.draft_body !== 'string') {
+            return;
+        }
+
+        var $block = $('.conv-reply-block');
+
+        // A closed form holds nothing, and the compose screen never gets here:
+        // the draft tools withhold themselves while the conversation is an
+        // unsent draft (PanelContext::isUnsentDraft()).
+        if (!$block.length || $block.hasClass('hidden')) {
+            return;
+        }
+
+        var open = $block.find(':input[name="thread_id"]:first').val();
+
+        if (!open || String(open) !== String(threadId)) {
+            return;
+        }
+
+        if (editorDraftIsUntouched(threadId)) {
+            setEditorBody(changes.draft_body);
+            rememberEditorDraft(threadId);
+            dismissDraftNotice();
+
+            if (typeof flashElement === 'function') {
+                flashElement($('.note-editor:first'));
+            }
+
+            showFloatingAlert('success', t('draft_refreshed', 'The assistant rewrote the draft in the editor.'));
+
+            return;
+        }
+
+        showDraftNotice(threadId, changes.draft_body);
+    }
+
+    /**
+     * Whether the editor still holds exactly what was loaded into it.
+     *
+     * Compared against a baseline taken from the editor itself rather than
+     * against the HTML that was handed to it: Summernote reformats what it is
+     * given, so the two are not the same string even before anyone types.
+     */
+    function editorDraftIsUntouched(threadId) {
+        if (!panel.editorDraft || String(panel.editorDraft.thread_id) !== String(threadId)) {
+            return false;
+        }
+
+        return currentEditorBody() === panel.editorDraft.body;
+    }
+
+    /**
+     * Take the baseline, once Summernote has finished with what it was given.
+     *
+     * Called after every path that loads a draft into the editor, so a second
+     * rewrite is judged against the text the first one left behind.
+     */
+    function rememberEditorDraft(threadId) {
+        setTimeout(function () {
+            panel.editorDraft = {
+                thread_id: threadId,
+                body: currentEditorBody()
+            };
+        }, 0);
+    }
+
+    /**
+     * Offer a rewrite that must not be applied over the agent's own edits.
+     *
+     * Injected with jQuery rather than added to core's reply block template:
+     * this is a module, and the markup it needs exists for the length of one
+     * notice.
+     */
+    function showDraftNotice(threadId, body) {
+        var $target = $('.conv-reply-block .col-xs-12:first');
+
+        if (!$target.length) {
+            return;
+        }
+
+        dismissDraftNotice();
+
+        var $notice = $('<div class="alert alert-info aicp-draft-notice" data-thread_id="' + escapeAttr(String(threadId)) + '">'
+            + '<i class="glyphicon glyphicon-refresh"></i> '
+            + '<span class="aicp-draft-notice-text"></span> '
+            + '<a href="#" class="aicp-draft-reload"></a>'
+            + '<a href="#" class="aicp-draft-dismiss"></a>'
+            + '</div>');
+
+        $notice.find('.aicp-draft-notice-text').text(t('draft_rewritten', 'The assistant rewrote this draft. Your own changes are still in the editor.'));
+        $notice.find('.aicp-draft-reload').text(t('draft_reload', 'Load the new text'));
+        $notice.find('.aicp-draft-dismiss').text(t('draft_keep', 'Keep mine'));
+
+        $notice.find('.aicp-draft-reload').on('click', function (e) {
+            e.preventDefault();
+            setEditorBody(body);
+            rememberEditorDraft(threadId);
+            dismissDraftNotice();
+        });
+
+        $notice.find('.aicp-draft-dismiss').on('click', function (e) {
+            e.preventDefault();
+            dismissDraftNotice();
+        });
+
+        $target.prepend($notice);
+    }
+
+    function dismissDraftNotice() {
+        $('.aicp-draft-notice').remove();
+    }
+
+    /**
+     * Drop the notice once the form it belongs to has moved on.
+     *
+     * The reply block is reused for notes, forwards and fresh replies, and core
+     * clears its thread_id each time (main.js:1580, :1633). An offer to load
+     * text into a draft that is no longer open is worse than no offer at all.
+     */
+    function syncDraftNotice() {
+        var $notice = $('.aicp-draft-notice');
+
+        if (!$notice.length) {
+            return;
+        }
+
+        var $block = $('.conv-reply-block');
+        var open = $block.find(':input[name="thread_id"]:first').val();
+
+        if ($block.hasClass('hidden') || String(open || '') !== String($notice.attr('data-thread_id'))) {
+            $notice.remove();
+        }
     }
 
     /**
@@ -2928,12 +3138,36 @@
 
         $main.find('.thread').addClass('aicp-core-bound');
 
+        // Core fires no event when the reply form is closed or repurposed, so
+        // the notice is re-checked after anything that could have done either.
+        $(document).on('click', function () {
+            setTimeout(syncDraftNotice, 0);
+        });
+
         $main.on('click', '.thread:not(.aicp-core-bound) .edit-draft-trigger', function (e) {
             e.preventDefault();
 
             if (typeof editDraft === 'function') {
                 editDraft($(this));
             }
+        });
+
+        // Every Edit button, core-bound or not, so a draft the agent opened
+        // themselves is judged against a baseline too. Passive on purpose: it
+        // watches what editDraft() does rather than doing any of it. The delay
+        // is for the load_draft round trip editDraft() makes.
+        $main.on('click', '.edit-draft-trigger', function () {
+            var threadId = $(this).parents('.thread:first').attr('data-thread_id');
+
+            if (!threadId) {
+                return;
+            }
+
+            dismissDraftNotice();
+
+            setTimeout(function () {
+                rememberEditorDraft(threadId);
+            }, 600);
         });
 
         $main.on('click', '.thread:not(.aicp-core-bound) .discard-draft-trigger', function (e) {
@@ -2983,6 +3217,9 @@
 
                     // Core hides the draft block while it is being edited.
                     $('#thread-' + threadId).hide();
+
+                    dismissDraftNotice();
+                    rememberEditorDraft(threadId);
                 } else {
                     showAjaxError(response);
                 }
@@ -3123,24 +3360,39 @@
         var plain = $.trim($('<div>').html(current || '').text());
         var isEmpty = !current || current === '<div><br></div>' || plain === '';
 
-        var next = isEmpty ? html : current + '<div><br></div>' + html;
+        setEditorBody(isEmpty ? html : current + '<div><br></div>' + html);
 
-        $body.summernote('code', next);
+        showFloatingAlert('success', t('inserted', 'Inserted into the editor. Review it before sending.'));
+    }
+
+    /**
+     * Make the editor hold exactly this HTML.
+     *
+     * The mirror into the hidden input and the onReplyChange() call are not
+     * decoration: Summernote's code setter does not mark the form dirty, and
+     * core's autosaver returns early on a form it believes is unchanged
+     * (main.js:4393) — so without them the text on screen and the text that
+     * gets saved drift apart.
+     */
+    function setEditorBody(html) {
+        var $body = $('#body');
+
+        if (!$body.length || !$body.data('summernote')) {
+            return;
+        }
+
+        $body.summernote('code', html);
         $body.summernote('commit');
 
-        // setReplyBody() does not mark the form dirty, and the autosaver bails
-        // on a form it thinks is unchanged.
         if (panel.compose) {
-            $("#form-create :input[name='body']:first").val(next);
+            $("#form-create :input[name='body']:first").val(html);
         } else {
-            $(".conv-reply-block :input[name='body']:first").val(next);
+            $(".conv-reply-block :input[name='body']:first").val(html);
         }
 
         if (typeof onReplyChange === 'function') {
             onReplyChange();
         }
-
-        showFloatingAlert('success', t('inserted', 'Inserted into the editor. Review it before sending.'));
     }
 
     function copyMessage($message) {
